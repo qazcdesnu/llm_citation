@@ -1,0 +1,14 @@
+# macOS / archive extraction artifacts
+.DS_Store
+._*
+__MACOSX/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Environments
+.env
+venv/
+.venv/
