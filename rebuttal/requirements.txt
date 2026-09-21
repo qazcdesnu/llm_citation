@@ -1,0 +1,16 @@
+# Environment for the rebuttal experiments (CPU-only subset).
+#   conda create -n llmcite python=3.11 -y
+#   pip install -r rebuttal/requirements.txt
+#   python -c "import nltk; nltk.download('stopwords')"
+pandas<2.3
+numpy<2
+nltk
+scikit-learn
+rank_bm25
+langchain-core      # required to unpickle the stored Document objects
+
+# Not yet installed -- needed for E4/E5 (keyword extractor ablations),
+# E10/E11 (efficiency re-measurement) and any GPU run:
+# torch
+# transformers
+# sentence-transformers

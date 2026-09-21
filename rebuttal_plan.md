@@ -1,5 +1,19 @@
 # Rebuttal 진행 계획
 
+> **현재 상태** (2026-09-21) — M0 완료, M1 진행 중
+>
+> | 단계 | 내용 | 상태 |
+> | --- | --- | --- |
+> | M0 | 진단 및 범위 확정 | ✅ 완료 |
+> | M1 | 평가 하네스 정비 | 🔄 코드 완료 · 데이터 차단 |
+> | M2 | 저비용 실험 (E1–E6) | ⬜ 대기 |
+> | M3 | 신규 baseline (E7–E9) | ⬜ 대기 |
+> | M4 | 효율성 재측정 (E10–E11) | ⬜ 대기 |
+> | M5 | 본문 수정 | ⬜ 대기 |
+> | M6 | Rebuttal letter | ⬜ 대기 |
+>
+> **블로커**: ALCE gold 라벨 · `main.py` 결과 pkl · NER 모델 · GPU 환경 · OpenAI 키 부재 → M1 잔여 2항목 및 M2 진입 차단 (상세는 M1 절)
+
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
 상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중
 
@@ -69,15 +83,48 @@ Point 5 (CiteFix 확인) ──┼──> 실험 목록/측정 프로토콜 확�
 
 CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 변형은 제외합니다. 우리 논문의 주장(경량 · 비신경 매칭)과 비교 축이 다르고, §3.4는 자체 학습 데이터 구축이 필요합니다. rebuttal에서 사유를 밝힙니다.
 
-## M1 — 평가 하네스 정비
+## M1 — 평가 하네스 정비  🔄 진행 중
 
 *모든 baseline이 같은 조건에서 비교되도록 만드는 단계. 여기를 건너뛰면 M2/M3 결과를 신뢰할 수 없습니다.*
 
-- [ ] `score_matrix (n_sentences × n_docs) → get_text()` 공통 인터페이스로 baseline 플러그인 구조 정리
-- [ ] **temperature / threshold 공정성 문제 해결** — 방법별로 동일한 sweep을 돌리고 각자의 최적값에서 비교 (현재: kw=0.05/0.2, jaccard=0.7/0)
-- [ ] `causal_jaccard` 함수명 정정 — causal이 아니라 full-token임
-- [ ] recall / precision / GPT-4 eval 파이프라인 스크립트화 (수동 노트북 의존 제거)
-- [ ] 논문 Table 1·4의 기존 수치 재현 확인 — 재현이 안 되면 이후 비교가 모두 무의미
+- [x] `score_matrix (n_sentences × n_docs) → assign()` 공통 인터페이스 구축 → `rebuttal/baselines.py`
+- [x] 제안 방법 · E1 · E2 · E3 · E7 · E8의 점수 함수 구현 및 동작 확인 (CPU)
+- [x] **temperature / threshold 공정성 구조 해결** — 하드코딩 제거, 전 방법이 `score_and_assign()` 단일 경로 통과. *실제 sweep은 gold 라벨이 필요하므로 M2에서 수행*
+- [x] `causal_jaccard` 명칭 문제 처리 → 신규 코드는 `full_token_jaccard` 사용. 원본 코드는 제출본 보존을 위해 미수정, `rebuttal/README.md`에 기록
+- [x] 실행 환경 구축 (`conda env llmcite`) + `rebuttal/requirements.txt`
+- [x] 스모크 테스트 — 200건 · 969문장 전량 통과 (`rebuttal/smoke_results.txt`)
+- [ ] 🚫 **recall / precision / GPT-4 eval 파이프라인 스크립트화** — 차단됨 (아래 참조)
+- [ ] 🚫 **논문 Table 1·4 기존 수치 재현 확인** — 차단됨 (아래 참조)
+
+### 스모크 테스트에서 나온 사실
+
+`appendix_data.pkl` (MedDialog 200건, 969문장)에는 **gold citation 라벨이 없으므로 정확도가 아닙니다.** 아래는 방법 간 *일치율*과 점수 계산 시간입니다.
+
+| 방법 | 점수 계산 시간 | ms/문장 |
+| --- | --- | --- |
+| keyword_jaccard (제안) | 0.006 s | 0.007 |
+| full_token_jaccard (E1) | 1.415 s | 1.461 |
+| citefix_intersection (E2) | 0.041 s | 0.042 |
+| citefix_ksc (E3) | 0.045 s | 0.047 |
+| tfidf (E7) | 0.682 s | 0.704 |
+| bm25 (E8) | 0.366 s | 0.378 |
+
+1. **E10 문제가 수치로 재현되었습니다.** 제안 방법이 236× 빠르게 보이지만, 이는 미리 계산된 keyword 집합을 읽기만 하기 때문입니다. 다른 방법들은 원문 토큰화·stemming을 측정 구간 안에서 수행합니다. Fig. 6의 구조적 결함을 우리 실행으로 재확인한 것이며, 재측정 없이는 방어가 불가능함이 분명해졌습니다.
+2. **Point 2 축이 유효합니다.** keyword_jaccard와 full_token_jaccard의 인용 할당이 **46.7%만 일치**합니다. 두 방법이 실질적으로 다르게 동작하므로 비교 실험이 의미가 있습니다. 어느 쪽이 더 정확한지는 gold 라벨이 필요합니다(M2).
+3. **제안 방법만 이질적입니다.** 어휘 기반 방법들끼리는 0.60–0.75 일치하는데, keyword_jaccard는 전부와 0.40–0.47입니다. keyword 추출이 실제로 다른 신호를 쓰고 있다는 방증입니다.
+4. **KSC의 retrieval 항은 거의 영향이 없습니다** (E2와 0.986 일치). 단 `appendix_data.pkl`에 retrieval score가 없어 순위 기반 대체값을 썼으므로 잠정치입니다.
+
+### 🚫 M1 잔여 항목 차단 사유
+
+두 항목은 저장소에 없는 자산이 필요합니다.
+
+| 필요한 것 | 용도 | 현재 상태 |
+| --- | --- | --- |
+| ALCE ASQA / QAMPARI 데이터 + gold citation 라벨 | recall/precision 계산 | 저장소에 MedDialog 테스트셋만 존재 |
+| `main.py` 실행 결과 pkl (`result/*.pkl`) | 기존 수치 재현의 입력 | 저장소에 없음 |
+| BioBERT NER · keyword extractor 모델 | E4·E5·E10 | 미설치 (HF에서 다운로드 가능) |
+| OpenAI API 키 | GPT-4 평가 | 미설정 |
+| GPU 실험 환경 (torch/transformers) | 위 전부 | `llmcite` 환경은 CPU 전용 |
 
 ## M2 — 저비용 실험 (기존 파이프라인 재사용) · Point 2, 3, 5
 

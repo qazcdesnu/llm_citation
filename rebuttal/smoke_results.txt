@@ -1,0 +1,23 @@
+rows=200  skipped=0  sentences=969
+
+Scoring time over the whole file (extraction cost NOT included for
+keyword_jaccard -- it reads precomputed keywords, exactly as
+processing_time.ipynb does; see E10):
+  keyword_jaccard          0.006 s   ( 0.007 ms/sentence)
+  full_token_jaccard       1.442 s   ( 1.488 ms/sentence)
+  citefix_intersection     0.041 s   ( 0.042 ms/sentence)
+  citefix_ksc              0.046 s   ( 0.047 ms/sentence)
+  tfidf                    0.700 s   ( 0.723 ms/sentence)
+  bm25                     0.365 s   ( 0.377 ms/sentence)
+
+Assignment agreement (fraction of sentences citing the same document):
+                          keyword_ja  full_token  citefix_in  citefix_ks       tfidf        bm25
+  keyword_jaccard              1.000       0.467       0.448       0.451       0.412       0.404
+  full_token_jaccard           0.467       1.000       0.686       0.682       0.601       0.641
+  citefix_intersection         0.448       0.686       1.000       0.986       0.684       0.752
+  citefix_ksc                  0.451       0.682       0.986       1.000       0.681       0.746
+  tfidf                        0.412       0.601       0.684       0.681       1.000       0.686
+  bm25                         0.404       0.641       0.752       0.746       0.686       1.000
+
+Point 2 axis -- keyword_jaccard vs full_token_jaccard:
+  identical assignment on 46.7% of sentences
