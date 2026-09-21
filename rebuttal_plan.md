@@ -5,14 +5,14 @@
 > | 단계 | 내용 | 상태 |
 > | --- | --- | --- |
 > | M0 | 진단 및 범위 확정 | ✅ 완료 |
-> | M1 | 평가 하네스 정비 | 🔄 코드 완료 · 데이터 차단 |
-> | M2 | 저비용 실험 (E1–E6) | ⬜ 대기 |
+> | M1 | 평가 하네스 정비 | ✅ 코드 완료 (GPU 실행은 서버 대기) |
+> | M2 | 저비용 실험 (E1–E6) | ⏸️ 서버 실행 대기 |
 > | M3 | 신규 baseline (E7–E9) | ⬜ 대기 |
 > | M4 | 효율성 재측정 (E10–E11) | ⬜ 대기 |
 > | M5 | 본문 수정 | ⬜ 대기 |
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
-> **블로커**: ALCE 데이터는 확보됐으나 채점기(AutoAIS T5-XXL 11B)가 24GB+ VRAM 필요 — 현재 머신 8GB로 실행 불가. 논문 실험은 A6000에서 수행되었음 (상세는 M1 절)
+> **블로커**: 채점기 AutoAIS(T5-XXL 11B)가 VRAM 28GB+ · 디스크 45.5GB 필요. 로컬은 8GB/31GB로 불가 → **코드는 전부 작성 완료, 서버 실행만 남음** (요구 사양·실행 순서: `rebuttal/SERVER.md`)
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
 상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중
@@ -93,8 +93,11 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [x] `causal_jaccard` 명칭 문제 처리 → 신규 코드는 `full_token_jaccard` 사용. 원본 코드는 제출본 보존을 위해 미수정, `rebuttal/README.md`에 기록
 - [x] 실행 환경 구축 (`conda env llmcite`) + `rebuttal/requirements.txt`
 - [x] 스모크 테스트 — 200건 · 969문장 전량 통과 (`rebuttal/smoke_results.txt`)
-- [ ] 🚫 **recall / precision / GPT-4 eval 파이프라인 스크립트화** — 차단됨 (아래 참조)
-- [ ] 🚫 **논문 Table 1·4 기존 수치 재현 확인** — 차단됨 (아래 참조)
+- [x] **평가 파이프라인 스크립트화** — ALCE `eval.py` 호출까지 연결 (`run_experiments.py`). 자체 지표를 만들지 않고 논문이 쓴 프로토콜을 그대로 사용
+- [x] GPU 실행 코드 작성 — `extract_keywords.py`(E4·E5 스위치 포함), `measure_efficiency.py`(E10·E11)
+- [x] 서버 실행 가이드 + 요구 사양 문서화 → `rebuttal/SERVER.md`
+- [ ] ⏸️ **서버에서 GPU 경로 실행·검증** — 사용자가 다른 서버에서 수행 예정
+- [ ] ⏸️ **논문 Table 1·4 기존 수치 재현 확인** — 서버 실행 후
 
 ### 스모크 테스트에서 나온 사실
 

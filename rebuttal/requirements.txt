@@ -1,7 +1,7 @@
-# Environment for the rebuttal experiments (CPU-only subset).
-#   conda create -n llmcite python=3.11 -y
-#   pip install -r rebuttal/requirements.txt
-#   python -c "import nltk; nltk.download('stopwords')"
+# CPU subset -- verified locally.
+#   conda create -n llmcite python=3.11 -y && conda activate llmcite
+#   pip install -r requirements.txt
+#   python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('punkt_tab')"
 pandas<2.3
 numpy<2
 nltk
@@ -9,8 +9,9 @@ scikit-learn
 rank_bm25
 langchain-core      # required to unpickle the stored Document objects
 
-# Not yet installed -- needed for E4/E5 (keyword extractor ablations),
-# E10/E11 (efficiency re-measurement) and any GPU run:
+# GPU additions -- needed for extract_keywords.py, measure_efficiency.py and
+# ALCE's eval.py. See SERVER.md for the VRAM/disk requirements.
 # torch
 # transformers
 # sentence-transformers
+# accelerate
