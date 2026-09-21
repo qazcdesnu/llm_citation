@@ -12,3 +12,6 @@ __pycache__/
 .env
 venv/
 .venv/
+
+# Rebuttal experiment outputs (regenerate with rebuttal/alce_adapter.py)
+rebuttal/runs/

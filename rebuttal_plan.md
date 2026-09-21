@@ -12,7 +12,7 @@
 > | M5 | 본문 수정 | ⬜ 대기 |
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
-> **블로커**: ALCE gold 라벨 · `main.py` 결과 pkl · NER 모델 · GPU 환경 · OpenAI 키 부재 → M1 잔여 2항목 및 M2 진입 차단 (상세는 M1 절)
+> **블로커**: ALCE 데이터는 확보됐으나 채점기(AutoAIS T5-XXL 11B)가 24GB+ VRAM 필요 — 현재 머신 8GB로 실행 불가. 논문 실험은 A6000에서 수행되었음 (상세는 M1 절)
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
 상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중
@@ -114,14 +114,26 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 3. **제안 방법만 이질적입니다.** 어휘 기반 방법들끼리는 0.60–0.75 일치하는데, keyword_jaccard는 전부와 0.40–0.47입니다. keyword 추출이 실제로 다른 신호를 쓰고 있다는 방증입니다.
 4. **KSC의 retrieval 항은 거의 영향이 없습니다** (E2와 0.986 일치). 단 `appendix_data.pkl`에 retrieval score가 없어 순위 기반 대체값을 썼으므로 잠정치입니다.
 
+### ALCE 연동 (2026-09-21 추가)
+
+- [x] ALCE 저장소 clone + 데이터 다운로드 (431MB, ASQA 948건 / QAMPARI 1000건)
+- [x] `rebuttal/alce_adapter.py` — 우리 점수 함수의 인용 할당을 ALCE `eval.py`가 읽는 결과 JSON 형식으로 변환. 문장 분할을 `eval.py`와 동일하게 맞춤(nltk `sent_tokenize`, QAMPARI는 쉼표 분할)하여 마커가 채점 단위와 정렬되도록 함
+- [x] 드라이런 검증 — ASQA·QAMPARI 각 50건 × 5개 방법, 누락 0건, 인용 마커 정상 생성
+- [ ] 전체 규모 실행 (gold 라벨 방식 확정 후)
+
+**중요: ALCE에는 gold citation 라벨이 없습니다.** `citation_rec` / `citation_prec`는 NLI 모델 `google/t5_xxl_true_nli_mixture`(T5-XXL 11B)로 계산됩니다. 즉 "라벨을 구한다"가 아니라 **11B 모델 추론을 돌린다**가 요구사항입니다.
+
+**부수 소득:** ALCE에 `post_hoc_cite.py --retriever tfidf`가 있습니다. 공식 TF-IDF post-hoc citation 구현이므로, E7은 우리 구현 대신 ALCE 것을 쓰는 편이 리뷰어 설득에 유리합니다. E7 항목에 반영 예정.
+
 ### 🚫 M1 잔여 항목 차단 사유
 
 두 항목은 저장소에 없는 자산이 필요합니다.
 
 | 필요한 것 | 용도 | 현재 상태 |
 | --- | --- | --- |
-| ALCE ASQA / QAMPARI 데이터 + gold citation 라벨 | recall/precision 계산 | 저장소에 MedDialog 테스트셋만 존재 |
+| ~~ALCE ASQA / QAMPARI 데이터~~ | recall/precision 계산 | ✅ 확보 (`~/Desktop/gsds/Research/ALCE/data`, 431MB) |
 | `main.py` 실행 결과 pkl (`result/*.pkl`) | 기존 수치 재현의 입력 | 저장소에 없음 |
+| **24GB+ VRAM GPU** | AutoAIS(T5-XXL 11B, bf16 ≈ 22GB) 채점 | **이 머신은 RTX 4060 Laptop 8GB — 불가** |
 | BioBERT NER · keyword extractor 모델 | E4·E5·E10 | 미설치 (HF에서 다운로드 가능) |
 | OpenAI API 키 | GPT-4 평가 | 미설정 |
 | GPU 실험 환경 (torch/transformers) | 위 전부 | `llmcite` 환경은 CPU 전용 |
