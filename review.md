@@ -11,8 +11,8 @@
 | 1   | Insufficient experiments to support the core claims: no lexical/sparse baseline on the citation task | Add citation-quality (recall/precision/GPT-4) comparisons against BM25-only, TF-IDF-only, and SPLADE, run in the same post-hoc sentence→document assignment setting               | 실험 수행 |
 | 2   | No experiment isolating the contribution of *keyword selection* itself                               | Add a full-token Jaccard baseline (same set-based scoring, no keyword extraction) — this is the direct control for the paper's central claim                                      | 실험 수행 |
 | 3   | Lack of a stage-wise ablation study                                                                  | Ablate each pipeline stage and report the resulting drop: domain-specific NER extractor → general extractor, stemming on/off, keyword set → full tokens, top-*k* sensitivity      | 실험 수행 |
-| 4   | Inappropriate expression: "requires no neural inference"                                             | Scope the claim to the matching step, since keyword extraction runs a fine-tuned BERT/BioBERT; state explicitly whether the reported efficiency numbers include that extractor    | 본문 수정 |
-| 5   | Insufficient citation-related work: CiteFix (ACL 2025 Industry) not discussed                        | Cite and empirically compare against CiteFix, whose keyword-matching variant addresses the same post-hoc citation-correction task                                                 | 선행 연구 확인 |
+| 4   | Inappropriate expression: "requires no neural inference"                                             | Scope the claim to the matching step, since keyword extraction runs a fine-tuned BERT/BioBERT; re-measure Fig. 3 / Fig. 6 with the extractor included                             | 실험 수행 |
+| 5   | Insufficient citation-related work: CiteFix (ACL 2025 Industry) not discussed                        | Reimplement CiteFix §3.1 / §3.2 on our datasets (its own data is proprietary) and cite it as concurrent work that independently corroborates our IDF argument                     | 선행 연구 확인, 실험 수행 |
 
 **Our solution** uses four labels:
 
@@ -43,12 +43,22 @@ Two things to separate in the fix:
 - *Wording.* The accurate claim is that the **similarity computation** requires no neural inference and no corpus statistics, while keyword extraction uses a lightweight encoder-only model — far cheaper than the sentence-transformer encoders it is compared against.
 - *Measurement.* Fig. 3 reports "loading the model and performing inference", which for the proposed method should mean the keyword extractor itself. If so, the 20.6× speedup and 17.9× memory reduction already account for the NER cost and the claim survives once reworded. This should be stated explicitly in the caption — otherwise the reviewer will read the efficiency numbers as excluding the very step they flagged.
 
-*Label note:* **본문 수정** assumes Fig. 3's "Load Model / Inference" bars already time the keyword extractor. If they do not, the figure has to be re-measured with the extractor included and this row becomes **실험 수행**. Worth confirming before the rebuttal is written.
+*Label resolved (M0):* escalated to **실험 수행**. Two findings force re-measurement:
+- Fig. 3's measurement script is not in the repository, and a filesystem search found no copy on the author's machine, so its scope cannot be verified from code.
+- Appendix C.1 (Fig. 6) provably excludes the extraction cost. In `processing_time.ipynb` cell 8, `process_rows()` reads precomputed `row['keyword_sentences']` / `row['keyword_documents']` columns in the Jaccard branch, while the TF-IDF and LCS branches build their features from raw text inside the timed loop. The reported 0.045 s therefore contains no BERT/BioBERT inference, and the comparison is not like-for-like.
+
+The second point is our own finding rather than the reviewer's literal request — a minimal reading of the comment would need only rewording. We treat it as **실험 수행** because the released code makes the discrepancy checkable by anyone, and because the §2 claim rests on Fig. 3's numbers.
 
 **5 — CiteFix overlaps more than a citation.**
 *CiteFix: Enhancing RAG Accuracy Through Post-Processing Citation Correction* (Maheshwari, Tenneti, Nakkiran; ACL 2025 Industry Track; arXiv:2504.15629) targets the same task — correcting citations after generation — and its method family includes **keyword matching plus semantic matching**, alongside BERTScore-based and lightweight-LLM variants. It reports a 15.46% relative improvement in overall citation accuracy. Because one of its variants instantiates the same core idea as this paper, treating it only as a related-work citation is unlikely to satisfy the reviewer; a head-to-head comparison on at least one shared dataset is the safer response. Note also that CiteFix is concurrent industry work rather than a prior baseline, which is worth stating when positioning the contribution.
 
-*Label note:* **선행 연구 확인** covers reading CiteFix and positioning it against our method in related work. If, after reading it, we judge that the reviewer wants numbers rather than discussion — and CiteFix's setup can be reproduced on one of our datasets — this row escalates to **실험 수행**.
+*Label resolved (M0), after reading the paper:*
+
+- **Its "keyword matching" is full-token intersection, not extracted keywords.** §3.1 defines *f* as "the size of the intersection between the tokens in x_i and x̂_j" over all tokens. It runs no NER or keyword extractor. That is within a normalization constant of our own `causal_jaccard()`, so **Point 2's full-token control and the CiteFix comparison are the same experiment**, and the head-to-head reduces exactly to our keyword-extraction step.
+- **§3.2 (Keyword + Semantic Context)** blends that score with the query–document retrieval score, *f* = λ·f_keyword + (1−λ)·r(q, x̂_j), λ = 0.8. A few lines to implement.
+- **It corroborates our §2 argument.** §3.1: "We also tried a term-frequency (TF) by inverse-document-frequency type of scoring ... but it did not yield good results. We noticed regular IDF being particularly noisy with domain specific keywords." This is independent industry evidence for the position the paper argues on IDF weighting — usable in the rebuttal for Point 1, though it does not remove the need to run those baselines ourselves.
+- **A literal head-to-head is impossible.** Evaluation is human SME auditing of an internal Amazon RAG product with anonymized models (Model A/B/C) and a custom MQLA metric; no dataset or code is released. The feasible response is to reimplement §3.1 / §3.2 on ASQA / QAMPARI / MedDialog and say so explicitly in the rebuttal.
+- **Positioning:** concurrent industry work (arXiv v1 April 2025), not a prior baseline we failed to compare against.
 
 ## References
 
