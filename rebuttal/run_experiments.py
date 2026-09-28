@@ -76,10 +76,11 @@ def main():
     ap.add_argument("--threshold", type=float, default=0.0)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--keyword-cache", default=None)
-    ap.add_argument("--alce", default="~/Desktop/gsds/Research/ALCE")
+    ap.add_argument("--alce", default=str(A.ALCE_DIR), help="ALCE checkout (default: $ALCE_DIR or ~/ALCE)")
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
+    A.set_alce_dir(a.alce)
 
     if not (a.build or a.eval):
         ap.error("pass --build and/or --eval")

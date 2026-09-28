@@ -15,3 +15,6 @@ venv/
 
 # Rebuttal experiment outputs (regenerate with rebuttal/alce_adapter.py)
 rebuttal/runs/
+
+# Slurm job logs
+rebuttal/slurm_log/

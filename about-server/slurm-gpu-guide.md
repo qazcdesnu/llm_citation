@@ -180,12 +180,12 @@ sbatch --dependency=afterok:${jid} step2.sh      # step1이 성공하면 실행
 - **랩 공용 디렉토리** (10TB/랩): 박현우 교수님 랩은 **`/shared/s3/lab03`** (권한 `drwxrwx--- root:lab03`)
   - 큰 데이터셋, 모델 체크포인트, HF 캐시는 여기에 둔다. 홈이 부족할 때는 공용 디렉토리 안에 개인 폴더를 만든다.
   - 랩원과 함께 쓰는 폴더는 그룹 쓰기 권한을 준다. 예: `chmod -R 770 dir`
-  - 홈에서 경로를 짧게 쓰려면 심볼릭 링크를 만든다. 예: `ln -s /shared/s3/lab03/jwkim ~/shared`
+  - 홈에서 경로를 짧게 쓰려면 심볼릭 링크를 만든다. 예: `ln -s /shared/s3/lab03/jinwoongkim ~/shared`
 - LLM 작업 시 기본 캐시 경로가 홈이라 quota가 금방 찬다. 공용 디렉토리로 옮긴다:
   ```bash
-  export HF_HOME=/shared/s3/lab03/jwkim/hf_cache
-  export TORCH_HOME=/shared/s3/lab03/jwkim/torch_cache
-  export PIP_CACHE_DIR=/shared/s3/lab03/jwkim/pip_cache
+  export HF_HOME=/shared/s3/lab03/jinwoongkim/hf_cache
+  export TORCH_HOME=/shared/s3/lab03/jinwoongkim/torch_cache
+  export PIP_CACHE_DIR=/shared/s3/lab03/jinwoongkim/pip_cache
   ```
 - 모든 노드가 NFS로 같은 파일을 본다. **수많은 작은 파일을 동시에 읽고 쓰면 전체 서버가 느려진다.**
 - 스토리지 증설은 공용 디렉토리에 여유가 있으면 승인되지 않는다.

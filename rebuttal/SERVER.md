@@ -36,8 +36,8 @@ ALCE `utils.py`의 `get_max_memory()`는 GPU마다 `여유 VRAM − 6GB`를 모�
   이 경우 activation 여유가 1–2GB뿐이라 긴 입력에서 OOM이 날 수 있습니다. 대기열이 길어 2장을 받기 어려울 때만 사용하십시오.
 - **8-bit / 4-bit 양자화는 쓰지 마십시오.** 논문의 기존 수치와 직접 비교할 수 없습니다.
 
-> `get_max_memory()`의 동작은 ALCE를 clone한 뒤 `utils.py`에서 한 번 확인하십시오.
-> 이 파일은 로컬 코드 기준으로 작성되었고, 서버에는 아직 ALCE가 없습니다.
+> 확인됨(ALCE `main` 브랜치 `utils.py`, 2026-09-24): `max_memory = f'{free_in_GB-6}GB'`를 `range(torch.cuda.device_count())`의
+> 모든 GPU에 동일하게 부여합니다. 따라서 `--gres=gpu:2`면 코드 수정 없이 두 장에 분산 적재됩니다.
 
 **디스크**: AutoAIS 체크포인트만 **45.5GB**(fp32 5샤드)이고, gtr-t5-xxl 19GB, NER 1.5GB입니다.
 생성 모델까지 받으면 총 **160GB+** 입니다. 개인 홈 quota는 **100GB**이므로
@@ -55,20 +55,22 @@ A6000 bf16 기준으로 설정당 30–60분을 추정했습니다. 3090 2장에
 
 ```bash
 # 0) 캐시·데이터를 공용 디렉토리로 (~/.bashrc에 추가 권장)
-export WORK=/shared/s3/lab03/$USER
+export WORK=/shared/s3/lab03/jinwoongkim
 mkdir -p $WORK/{hf_cache,pip_cache}
 export HF_HOME=$WORK/hf_cache
 export PIP_CACHE_DIR=$WORK/pip_cache
+export ALCE_DIR=$WORK/ALCE          # alce_adapter.py가 이 경로에서 데이터를 읽는다
 
 # 환경 (GPU 노드에서)
-srun -p P2 --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=01:00:00 --pty bash
+srun -p P2 -n 1 --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=01:00:00 --pty bash
+source ~/miniconda3/bin/activate     # ~/.bashrc에 conda init이 없으므로 직접 source
 conda create -n llmcite python=3.11 -y && conda activate llmcite
 pip install -r requirements.txt
 pip install torch transformers sentence-transformers accelerate   # GPU 추가분
 python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('punkt_tab')"
 
 # 1) ALCE 데이터 (이미 받았다면 생략). 공용 디렉토리에 둔다
-git clone https://github.com/princeton-nlp/ALCE.git $WORK/ALCE && cd $WORK/ALCE && bash download_data.sh
+git clone https://github.com/princeton-nlp/ALCE.git $ALCE_DIR && (cd $ALCE_DIR && bash download_data.sh)
 
 # 2) 동작 확인 (GPU 1장)
 python extract_keywords.py --self-check
@@ -99,25 +101,33 @@ python measure_efficiency.py --dataset asqa --limit 200
 #SBATCH --job-name=llmcite-eval
 #SBATCH --partition=P2
 #SBATCH --nodes=1
+#SBATCH --ntasks=1
 #SBATCH --gres=gpu:2                 # AutoAIS 11B를 두 장에 분산 (ALCE 코드 수정 불필요)
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G                    # fp32 체크포인트(45.5GB)를 로드하는 동안 CPU RAM 여유 필요
 #SBATCH --time=12:00:00
 #SBATCH --output=slurm_log/%x-%j.out
 #SBATCH --open-mode=append
+#SBATCH --exclude=b01                # 2026-09-24 할당된 GPU가 보이지 않던 노드
 
-source ${HOME}/.bashrc
-conda activate llmcite
-export HF_HOME=/shared/s3/lab03/$USER/hf_cache
+# conda 활성화는 반드시 source로 (sbatch는 비대화형 셸이라 ~/.bashrc의 conda 설정에 기대면 안 된다)
+source ${HOME}/miniconda3/bin/activate llmcite
+export HF_HOME=/shared/s3/lab03/jinwoongkim/hf_cache
+export ALCE_DIR=/shared/s3/lab03/jinwoongkim/ALCE
 
-python run_experiments.py --eval --alce /shared/s3/lab03/$USER/ALCE
+python run_experiments.py --eval
 ```
 
 - 12시간 안에 끝나지 않으면 같은 스크립트를 다시 `sbatch`로 제출합니다. 자동으로 이어서 하려면 `about-server/slurm-gpu-guide.md` §5의 requeue 패턴을 쓰십시오.
 - 제출 전에 `mkdir -p slurm_log`를 실행하십시오. 디렉터리가 없으면 로그가 남지 않습니다.
 - `--mem=96G`는 추정치입니다. 첫 실행 후 `sacct -j <id> --format=MaxRSS`로 실제 사용량을 보고 줄이십시오.
 
-`--alce` 경로는 기본값이 `~/Desktop/gsds/Research/ALCE`이므로 서버에서는 반드시 지정하십시오.
+**ALCE 경로**는 환경 변수 `ALCE_DIR`로 지정합니다(미지정 시 `~/ALCE`).
+`--build`, `extract_keywords.py`, `measure_efficiency.py`도 이 경로에서 데이터를 읽으므로,
+**모든 sbatch 스크립트와 `srun` 셸에서 `export ALCE_DIR=...`를 먼저 하십시오.** (`run_experiments.py --alce`로 덮어쓸 수도 있습니다.)
+
+**conda 활성화**: 모든 sbatch 스크립트는 본문 첫 줄에서 `source ${HOME}/miniconda3/bin/activate llmcite`로 환경을 켜야 합니다.
+`source ~/.bashrc` 뒤 `conda activate`는 이 계정의 `~/.bashrc`에 conda 초기화가 없어 `conda: command not found`로 실패합니다.
 
 **효율성 측정(E10/E11) 주의**: 논문 Fig. 3의 기존 수치는 A6000에서 측정했습니다.
 서버의 3090/4090에서 잰 시간이나 메모리를 기존 수치와 섞지 말고, **비교 대상 전부를 같은 GPU에서 다시 측정**하십시오.
@@ -130,7 +140,7 @@ gtr-t5-xxl(fp32 19GB)은 24GB 한 장에 들어갑니다.
 2. GPU 노드 안에서 `nvidia-smi`로 할당받은 GPU 수와 여유 VRAM 확인 (로그인 노드에는 `nvidia-smi`가 없습니다)
 3. `df -h /shared/s3/lab03`와 `du -sh ~`: 공용 디렉토리 여유와 홈 사용량(quota 100GB) 확인
 4. `echo $HF_HOME`: 모델이 홈이 아닌 공용 디렉토리에 받아지는지 확인
-5. `run_experiments.py --eval --dry-run --alce <경로>`로 명령만 먼저 출력해 경로 확인
+5. `echo $ALCE_DIR && ls $ALCE_DIR/data` 확인 후 `run_experiments.py --eval --dry-run`으로 명령만 먼저 출력해 경로 확인
 6. 파일 하나로 AutoAIS가 2장에 적재되고 OOM 없이 도는지 짧게 확인한 뒤 전체 채점 제출
 
 ## 5. 남은 설계 결정

@@ -12,6 +12,7 @@ evaluator will score (nltk sent_tokenize; comma-split for QAMPARI).
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,12 +22,22 @@ from nltk import sent_tokenize
 sys.path.insert(0, str(Path(__file__).parent))
 from baselines import SCORERS, Context, assign, softmax  # noqa: E402
 
-ALCE_DIR = Path.home() / "Desktop" / "gsds" / "Research" / "ALCE"
+# Set ALCE_DIR to the ALCE checkout (e.g. /shared/s3/lab03/jinwoongkim/ALCE on GSDS).
+ALCE_DIR = Path(os.environ.get("ALCE_DIR", "~/ALCE")).expanduser()
 DATA = ALCE_DIR / "data"
+
+
+def set_alce_dir(path) -> None:
+    global ALCE_DIR, DATA
+    ALCE_DIR = Path(path).expanduser()
+    DATA = ALCE_DIR / "data"
 
 
 def load(dataset: str, retriever: str = "gtr", limit: int | None = None) -> list[dict]:
     path = DATA / f"{dataset}_eval_{retriever}_top100.json"
+    if not path.exists():
+        sys.exit(f"ALCE data not found: {path}\n"
+                 "set ALCE_DIR (or --alce) to the ALCE checkout and run download_data.sh")
     items = json.load(open(path))
     return items[:limit] if limit else items
 
