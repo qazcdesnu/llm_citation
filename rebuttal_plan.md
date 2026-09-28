@@ -1,21 +1,68 @@
 # Rebuttal 진행 계획
 
-> **현재 상태** (2026-09-21) — M0 완료, M1 진행 중
+> **현재 상태** (2026-09-28) — M0 완료, M1 서버 이전 중
 >
 > | 단계 | 내용 | 상태 |
 > | --- | --- | --- |
 > | M0 | 진단 및 범위 확정 | ✅ 완료 |
-> | M1 | 평가 하네스 정비 | ✅ 코드 완료 (GPU 실행은 서버 대기) |
-> | M2 | 저비용 실험 (E1–E6) | ⏸️ 서버 실행 대기 |
-> | M3 | 신규 baseline (E7–E9) | ⬜ 대기 |
-> | M4 | 효율성 재측정 (E10–E11) | ⬜ 대기 |
-> | M5 | 본문 수정 | ⬜ 대기 |
+> | M1 | 평가 하네스 정비 | 🔄 서버(GSDS) 이전 중 — 경로 수정 완료, 환경·ALCE 설치 및 생성 답변 입력 코드 남음 |
+> | M2 | 저비용 실험 (E1–E6) | ⬜ 대기 — E1–E3은 **1단계**, E4–E6은 **2단계** |
+> | M3 | 신규 baseline (E7–E9) | ⬜ 대기 — 전부 **1단계** (E9 SPLADE 신규 구현) |
+> | M4 | 효율성 재측정 (E10–E11) | ⬜ 대기 — **2단계**, 제출 전 필수 |
+> | M5 | 본문 수정 | ⬜ 대기 — Point 4 문구는 **1단계** |
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
-> **블로커**: 채점기 AutoAIS(T5-XXL 11B)가 VRAM 28GB+ · 디스크 45.5GB 필요. 로컬은 8GB/31GB로 불가 → **코드는 전부 작성 완료, 서버 실행만 남음** (요구 사양·실행 순서: `rebuttal/SERVER.md`)
+> **실행 환경**: GSDS 서버(RTX 3090/4090 24GB). AutoAIS(T5-XXL 11B)는 GPU 2장으로 ALCE 코드 수정 없이 채점 가능 (`rebuttal/SERVER.md`).
+> 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`. PubMed 2023 baseline 다운로드 중(job 492514, `rebuttal/pubmed/`).
+>
+> **남은 블로커**: ① Llama-2 접근 승인 HF 토큰 ② OpenAI API 키(MedDialog GPT-4 평가, 2단계) ③ 공저자 확인 — 원본 생성 결과·FAISS DB 존재 여부, "year_partial" 의미, MedDialog baseline encoder
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
-상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중
+상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중 · 🅰 1단계 · 🅱 2단계
+
+## 실행 우선순위 (2026-09-28 확정)
+
+범위를 "리뷰어가 명시적으로 요구한 비교"(1단계)와 "보강"(2단계)으로 나눈다.
+SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안을 검토했으나, 리뷰 원문이 **"BM25로만 또는 TF-IDF로만"을 명시**했고
+두 방법은 이미 구현되어 있어 추가 비용이 채점 몇 분뿐이므로 1단계에 포함한다.
+
+### 🅰 1단계 — 리뷰어 요구에 직접 답하는 비교 (필수)
+
+- **데이터**: ASQA · QAMPARI, **LLM 생성 답변**(`--field output`), 논문과 같은 100건(ALCE `run.py --quick_test 100`, seed 42)
+- **생성 모델**: Llama2-7B Chat(사람 평가 모델)으로 전 과정을 먼저 완주 → Table 1의 5개 모델로 확장
+- **방법** (모두 같은 생성 답변 위에서 재실행)
+
+| 구분 | 방법 | 구현 |
+| --- | --- | --- |
+| 기준점 | dense baseline (gtr-t5-xxl MIPS), 제안 방법 | 재실행 |
+| Point 2 | **E1** full-token Jaccard | ✅ |
+| Point 5 | **E2** CiteFix §3.1 · **E3** CiteFix §3.2 KSC | ✅ (E3의 retrieval score가 ALCE `docs`에 있는지 확인) |
+| Point 1 | **E9** SPLADE | ❌ 신규 구현 |
+| Point 1 | **E7** TF-IDF · **E8** BM25 | ✅ (E7은 ALCE `post_hoc_cite.py --retriever tfidf`도 가능) |
+
+- **비실험**: Point 4 문구 수정 ("requires no neural inference" → 유사도 계산 단계로 한정)
+- **게이트**: E1 결과가 나오면 멈추고 검토. full-token Jaccard ≈ 제안 방법이면 기여 서술을 재검토한 뒤 2단계 진입
+
+### 🅱 2단계 — 보강 (1단계 결과 확인 후)
+
+- **E10 · E11** 효율성 재측정 — keyword 추출 포함, SPLADE 포함. PubMedQA 200건(`appendix_data.pkl`). **Fig. 6 결함 때문에 제출 전 필수**
+- **E4** stemming on/off · **E6** threshold / top-*k* — ASQA에서 저비용 단계별 ablation
+- **MedDialog** — E5(BioBERT NER → general extractor) 및 의료 도메인 baseline 비교. 코퍼스 재구축 + GPT-4 평가가 필요해 가장 비쌈. 진행 여부는 1단계 결과와 남은 기간으로 결정
+- **확장** — 생성 모델 9개 전체, ASQA 948 / QAMPARI 1000 전체 dev set
+
+MedDialog를 끝내 수행하지 못하면 E5가 빠진다. 논문 Limitations가 이미 "extractor 선택에 대한 민감도는 정량화하지 않았다"고 인정하므로 rebuttal에서 이 한계로 답한다.
+
+## 서버 이전 후 확정 사항 (2026-09-28)
+
+논문 전문과 원본 코드를 다시 읽고 확정한 내용.
+
+1. **채점 대상은 생성 답변.** Table 1·4가 9개 LLM의 생성 답변 기준이고, 리뷰어도 "문장을 생성한 후 … 비교"를 전제했다. gold 답변(`--field answer`)은 사람이 쓴 글이라 §3의 전제(LLM이 검색 문서의 keyword를 재사용)를 검증하지 못하므로 보조 결과로만 쓴다.
+2. **샘플은 논문과 동일하게.** 논문의 100건은 ALCE `run.py --quick_test 100`(seed 42 무작위 추출)으로 추정. 현재 `--limit`은 앞에서 N건을 자르므로 다름 → 수정 필요.
+3. **dense baseline은 직접 재실행.** Table 1 baseline은 "ALCE 보고 수치"를 가져온 것이고, ALCE `post_hoc_cite.py`의 기본 retriever는 논문이 말하는 gtr-t5-xxl이 아니라 **gtr-t5-large**다. 같은 생성 답변에 `--retriever gtr-t5-xxl`로 재실행해 비교 조건을 맞춘다.
+4. **`main.py`는 MedDialog 전용.** PubMed/Medline FAISS 검색 → 생성 → pkl. ASQA/QAMPARI에 keyword 인용을 적용한 코드는 저장소에 없다.
+5. **MedDialog baseline이 논문 설명과 다를 가능성.** `citation.py`의 gtr 경로는 `H` 미정의로 실행 불가, `run_2.sh`는 `--encoder bert-base-uncased --top_k 6`. 논문은 gtr-t5-xxl · top 15. 공저자 확인 필요, 재실험은 gtr-t5-xxl로.
+6. **MedDialog 코퍼스는 공식 경로로 재현 불가.** PubMed 2023 baseline은 NCBI FTP에서 삭제, MBR(`mbr.nlm.nih.gov`)은 미해결. Wayback Machine에 1165/1166 파일이 원본 md5 그대로 남아 있어 복구 중이며, 빠진 `pubmed23n0673`은 2026 baseline의 같은 PMID 범위로 대체 (`rebuttal/pubmed/README.md`).
+7. **데이터셋 배정.** ASQA·QAMPARI = 1단계 전 비교(객관적 NLI 지표). MedDialog = E5 및 도메인 비교(2단계). ASQA/QAMPARI는 원래 general extractor를 쓰므로 그 위의 E5는 성립하지 않아 제외. PubMedQA 200건 = E10·E11.
 
 ## 순서가 중요한 이유
 
@@ -96,12 +143,16 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [x] **평가 파이프라인 스크립트화** — ALCE `eval.py` 호출까지 연결 (`run_experiments.py`). 자체 지표를 만들지 않고 논문이 쓴 프로토콜을 그대로 사용
 - [x] GPU 실행 코드 작성 — `extract_keywords.py`(E4·E5 스위치 포함), `measure_efficiency.py`(E10·E11)
 - [x] 서버 실행 가이드 + 요구 사양 문서화 → `rebuttal/SERVER.md`
-- [ ] ⏸️ **서버에서 GPU 경로 실행·검증** — 사용자가 다른 서버에서 수행 예정
-- [ ] ⏸️ **논문 Table 1·4 기존 수치 재현 확인** — 서버 실행 후
+- [x] 서버 이전 준비 — 노트북 경로 하드코딩 제거(`ALCE_DIR`), sbatch 내 `source` 기반 conda 활성화, 작업 경로 `/shared/s3/lab03/jinwoongkim` (2026-09-28)
+- [ ] 🅰 서버 환경 구축 — `llmcite` 설치(GPU 노드), 드라이버·`torch.cuda` 확인, ALCE clone + 데이터(`$ALCE_DIR`), `eval.py` 의존성
+- [ ] 🅰 **생성 답변 입력 경로** — `alce_adapter`가 ALCE `run.py` 결과 JSON(`output`)을 읽도록 확장, 샘플을 `--quick_test 100`·seed 42로 맞춤
+- [ ] 🅰 ALCE로 생성 답변 만들기 — Llama2-7B Chat → Table 1의 5개 모델, ASQA·QAMPARI 각 100건
+- [ ] 🅰 GPU 경로 검증 — 파일 1개로 AutoAIS 2-GPU 적재·채점 확인 후 전체 제출
+- [ ] 🅰 **재실행 결과가 Table 1과 같은 방향인지 확인** — 제안 방법 vs 재실행 dense baseline. 생성 답변을 새로 만들므로 수치 일치가 아니라 방향 일치를 게이트로 둔다
 
 ### 스모크 테스트에서 나온 사실
 
-`appendix_data.pkl` (MedDialog 200건, 969문장)에는 **gold citation 라벨이 없으므로 정확도가 아닙니다.** 아래는 방법 간 *일치율*과 점수 계산 시간입니다.
+`appendix_data.pkl` (**PubMedQA** 질문 200건 × 문서 4개, 969문장 — Fig. 1·Appendix C.1의 데이터. *2026-09-28 정정: 이전 기록의 "MedDialog"는 오기*)에는 **gold citation 라벨이 없으므로 정확도가 아닙니다.** 아래는 방법 간 *일치율*과 점수 계산 시간입니다.
 
 | 방법 | 점수 계산 시간 | ms/문장 |
 | --- | --- | --- |
@@ -122,7 +173,7 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [x] ALCE 저장소 clone + 데이터 다운로드 (431MB, ASQA 948건 / QAMPARI 1000건)
 - [x] `rebuttal/alce_adapter.py` — 우리 점수 함수의 인용 할당을 ALCE `eval.py`가 읽는 결과 JSON 형식으로 변환. 문장 분할을 `eval.py`와 동일하게 맞춤(nltk `sent_tokenize`, QAMPARI는 쉼표 분할)하여 마커가 채점 단위와 정렬되도록 함
 - [x] 드라이런 검증 — ASQA·QAMPARI 각 50건 × 5개 방법, 누락 0건, 인용 마커 정상 생성
-- [ ] 전체 규모 실행 (gold 라벨 방식 확정 후)
+- [ ] 🅰 본 실행 — 생성 답변 기반으로 확정(2026-09-28), 위 M1 항목 완료 후
 
 **중요: ALCE에는 gold citation 라벨이 없습니다.** `citation_rec` / `citation_prec`는 NLI 모델 `google/t5_xxl_true_nli_mixture`(T5-XXL 11B)로 계산됩니다. 즉 "라벨을 구한다"가 아니라 **11B 모델 추론을 돌린다**가 요구사항입니다.
 
@@ -132,45 +183,47 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 
 두 항목은 저장소에 없는 자산이 필요합니다.
 
-| 필요한 것 | 용도 | 현재 상태 |
+| 필요한 것 | 용도 | 현재 상태 (2026-09-28) |
 | --- | --- | --- |
-| ~~ALCE ASQA / QAMPARI 데이터~~ | recall/precision 계산 | ✅ 확보 (`~/Desktop/gsds/Research/ALCE/data`, 431MB) |
-| `main.py` 실행 결과 pkl (`result/*.pkl`) | 기존 수치 재현의 입력 | 저장소에 없음 |
-| **24GB+ VRAM GPU** | AutoAIS(T5-XXL 11B, bf16 ≈ 22GB) 채점 | **이 머신은 RTX 4060 Laptop 8GB — 불가** |
-| BioBERT NER · keyword extractor 모델 | E4·E5·E10 | 미설치 (HF에서 다운로드 가능) |
-| OpenAI API 키 | GPT-4 평가 | 미설정 |
-| GPU 실험 환경 (torch/transformers) | 위 전부 | `llmcite` 환경은 CPU 전용 |
+| ALCE ASQA / QAMPARI 데이터 | recall/precision 계산 | 노트북에만 있음 → 서버 `$ALCE_DIR`에 재설치 필요 |
+| `main.py` 실행 결과 pkl (`result/*.pkl`) | MedDialog 원본 생성 결과 | 저장소에 없음. 공저자 확인 중. 없으면 재생성(2단계) |
+| ~~24GB+ VRAM GPU~~ | AutoAIS 채점 | ✅ GSDS 3090 × 2장으로 해결 |
+| BioBERT NER · keyword extractor 모델 | E4·E5·E10 | HF에서 다운로드 (`HF_HOME`은 공용 디렉토리) |
+| Llama-2 접근 승인 HF 토큰 | 🅰 생성 답변 | 미확인 |
+| OpenAI API 키 | 🅱 MedDialog GPT-4 평가 | 미설정 |
+| MedDialog 검색 코퍼스 (PubMed 2023) | 🅱 MedDialog 재생성 | Wayback에서 복구 중 (job 492514) |
+| GPU 실험 환경 (torch/transformers) | 위 전부 | 서버 `llmcite` 미설치 |
 
 ## M2 — 저비용 실험 (기존 파이프라인 재사용) · Point 2, 3, 5
 
-- [ ] **E1 full-token Jaccard 결과 평가·보고** — `jaccard_output` 컬럼, 3개 데이터셋 × 주요 모델 *(Point 2, 3)*
-- [ ] **E2 CiteFix §3.1 재구현** — 정규화 없는 token intersection *(Point 5)*
-- [ ] **E3 CiteFix §3.2 KSC 재구현** — λ=0.8, retrieval score 필요 *(Point 5)*
-- [ ] E4 stemming on/off ablation — `stem_entities()` 우회 *(Point 3)*
-- [ ] E5 domain-specific NER → general extractor 교체 ablation (MedDialog 대상) *(Point 3)*
-- [ ] E6 threshold / top-*k* 민감도 *(Point 3)*
-- [ ] 단계별 성능 하락 폭을 하나의 ablation 표로 정리
+- [ ] 🅰 **E1 full-token Jaccard** — ASQA·QAMPARI 생성 답변 위에서 재실행·채점. **결과가 나오면 게이트 검토** *(Point 2, 3)*
+- [ ] 🅰 **E2 CiteFix §3.1 재구현** — 정규화 없는 token intersection *(Point 5)*
+- [ ] 🅰 **E3 CiteFix §3.2 KSC 재구현** — λ=0.8, retrieval score 필요(ALCE `docs`에 있는지 확인) *(Point 5)*
+- [ ] 🅱 E4 stemming on/off ablation — `stem_entities()` 우회 *(Point 3)*
+- [ ] 🅱 E5 domain-specific NER → general extractor 교체 ablation — **MedDialog에서만 성립** (ASQA/QAMPARI는 원래 general extractor) *(Point 3)*
+- [ ] 🅱 E6 threshold / top-*k* 민감도 *(Point 3)*
+- [ ] 🅱 단계별 성능 하락 폭을 하나의 ablation 표로 정리 (1단계만 끝나면 E1이 핵심 ablation을 겸함)
 - [ ] 논문의 기존 "ablation study"(생성 모델 sweep) 명칭 정정 방침 결정
 
 ## M3 — 신규 baseline 구현 · Point 1
 
-- [ ] E7 TF-IDF citation baseline — `processing_time.ipynb`의 `compute_tfidf_similarity_matrix()` 이식
-- [ ] E8 BM25 citation baseline (`rank_bm25`) — 고정된 retrieved 문서 집합 위에서 문장별 점수화
-- [ ] E9 SPLADE citation baseline — 모델 선정 및 sparse 표현 → score_matrix 변환
+- [ ] 🅰 E7 TF-IDF citation baseline — 우리 구현 ✅, ALCE `post_hoc_cite.py --retriever tfidf`와 교차 확인
+- [ ] 🅰 E8 BM25 citation baseline (`rank_bm25`) — 고정된 retrieved 문서 집합 위에서 문장별 점수화
+- [ ] 🅰 **E9 SPLADE citation baseline** — 유일한 신규 구현. 모델 선정 및 sparse 표현 → score_matrix 변환
 - [x] ~~CiteFix 재현 여부 결정~~ → M2(E2·E3)로 이동, M0에서 확정
-- [ ] 전체 방법 × 3개 데이터셋 인용 품질 표 작성 (제안 방법 · dense MIPS · E1–E3 · E7–E9)
+- [ ] 🅰 ASQA·QAMPARI 인용 품질 표 작성 (MedDialog는 🅱) (제안 방법 · dense MIPS · E1–E3 · E7–E9)
 - [ ] §2의 "네 가지 차별점" 주장이 수치로 뒷받침되는지 검토 — 안 되는 항목은 주장을 완화
 
 ## M4 — 효율성 재측정 · Point 4
 
-- [ ] E10 Appendix C.1(Fig. 6) 재측정 — **keyword 추출 시간 포함**, 모든 방법 동일 조건
-- [ ] E11 Fig. 3 재측정 — extractor load/inference 및 GPU 메모리 포함 (측정 스크립트 신규 작성 필요)
-- [ ] M3의 신규 baseline들 시간/메모리 추가
+- [ ] 🅱 E10 Appendix C.1(Fig. 6) 재측정 — **제출 전 필수** — **keyword 추출 시간 포함**, 모든 방법 동일 조건
+- [ ] 🅱 E11 Fig. 3 재측정 — extractor load/inference 및 GPU 메모리 포함 (측정 스크립트 신규 작성 필요)
+- [ ] 🅱 M3의 신규 baseline들(SPLADE 포함) 시간/메모리 추가
 - [ ] 재측정 후에도 속도 우위가 유지되는지 확인 → 유지되지 않으면 효율성 주장의 강도를 조정
 
 ## M5 — 본문 수정
 
-- [ ] §2 "requires no neural training or inference" 문구 수정 — 유사도 계산 단계로 한정 *(Point 4)*
+- [ ] 🅰 §2 "requires no neural training or inference" 문구 수정 — 유사도 계산 단계로 한정 *(Point 4)*
 - [ ] Fig. 3 / Fig. 6 캡션에 측정 범위 명시 *(Point 4)*
 - [ ] 국문 초록 "추가적인 학습 없이도" 표현 점검
 - [ ] Related work에 CiteFix 추가 — concurrent work로 위치 명시 + IDF 관련 §3.1 논지를 우리 주장의 방증으로 인용 *(Point 5, 1)*
@@ -194,5 +247,6 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 | --- | --- | --- |
 | M4 재측정 후 속도 우위가 크게 줄어듦 | 논문의 핵심 셀링포인트인 효율성 주장 약화 | M0-2에서 조기에 확인. 우위가 남는 범위(유사도 계산 단계)로 주장을 재정의 |
 | M2에서 full-token Jaccard가 keyword Jaccard와 비슷한 성능 | 논문의 중심 주장(keyword 선택이 기여) 자체가 흔들림 | 가장 먼저 확인해야 하는 이유. 결과에 따라 기여도 재서술 필요 |
-| M1 재현 실패 | 이후 모든 비교 무효 | M1을 M2 진입 게이트로 둠 |
+| 재실행 결과가 Table 1과 방향이 다름 | 기존 결과의 신뢰성 문제로 번짐 | 새 생성 답변 위 제안 방법 vs 재실행 baseline의 방향 일치를 M1 게이트로 둠. 불일치 시 원인(샘플·생성 설정·baseline encoder)부터 규명 |
+| MedDialog 재현 불가(코퍼스·원본 결과 부재) | E5 및 도메인 비교 누락 | 2단계로 분리. 못 하면 Limitations의 기존 인정으로 대응 |
 | ~~CiteFix 코드 미공개~~ (M0에서 확정) | 원 데이터 기준 비교 불가 | 우리 데이터셋에 §3.1/§3.2 재구현(E2·E3), rebuttal에 사유 명시 |
