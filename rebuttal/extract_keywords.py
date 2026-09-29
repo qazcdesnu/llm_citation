@@ -74,11 +74,18 @@ def _merge_subwords(ner_result) -> dict[str, str]:
     return unique
 
 
-def extract(texts: list[str], pipes, stem: bool = True) -> list[set[str]]:
-    """One keyword set per input text."""
+def extract(texts: list[str], pipes, stem: bool = True,
+            batch_size: int | None = None) -> list[set[str]]:
+    """One keyword set per input text.
+
+    batch_size=None keeps the pipeline default (1), which is how the keyword
+    caches for M2 were built; measure_efficiency.py passes 32 to match the
+    batching of the dense/SPLADE baselines.
+    """
     out: list[set[str]] = [set() for _ in texts]
+    kw = {} if batch_size is None else {"batch_size": batch_size}
     for _, nlp in pipes.items():
-        for idx, result in enumerate(nlp(texts)):
+        for idx, result in enumerate(nlp(texts, **kw)):
             unique = _merge_subwords(result)
             for lower, original in unique.items():
                 if lower in _UNWANTED:

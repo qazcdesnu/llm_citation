@@ -1,6 +1,6 @@
 # Rebuttal 진행 계획
 
-> **현재 상태** (2026-09-29) — M0·M1 완료, M2·M3 결과 나옴(**E1 게이트: 핵심 주장 미지지 → 재서술 검토 중**), 남은 실험은 E10 · **범위: rebuttal 최소 조건**
+> **현재 상태** (2026-09-30) — **최소 범위 실험 전부 완료** (M1–M4). E1 게이트: 핵심 주장 미지지 → **재서술 방향 합의가 다음 단계** (M5·M6) · **범위: rebuttal 최소 조건**
 >
 > | 단계 | 내용 | 상태 |
 > | --- | --- | --- |
@@ -8,7 +8,7 @@
 > | M1 | 평가 하네스 정비 | ✅ 완료 — 환경(transformers<5), 생성 답변 입력, GPU 2장 AutoAIS 검증 |
 > | M2 | E1–E3 (full-token Jaccard, CiteFix) | ✅ 실행 완료 (아래 "M2 결과") — E4–E6은 **범위 제외** |
 > | M3 | 신규 baseline (E7–E9) | ✅ 완료 — E9 SPLADE가 두 데이터셋 1위 (ASQA 60.8 · QAMPARI 17.7) |
-> | M4 | 효율성 재측정 | ⬜ 대기 — **E10만**, E11은 범위 제외 |
+> | M4 | 효율성 재측정 | ✅ E10 완료 — 추출 포함 시 gtr-t5-xxl 대비 7–23× 빠름, SPLADE·TF-IDF·BM25보다는 느림. E11은 범위 제외 |
 > | M5 | 본문 수정 | ⬜ 대기 |
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
@@ -128,6 +128,36 @@ Llama2-7B Chat 50.9/47.5 · 10.6/10.9, Llama2-13B Chat 38.4/39.4 · 9.6/9.7, Vic
 → 논문의 개선은 "생성기 자체 인용 대비 post-hoc 재인용"의 효과이며, "keyword 방식이 dense보다 정확하다"는 근거는 되지 못한다.
 
 **수정한 버그 (기록)**: ① QAMPARI 출력이 공백으로 이어져 `eval.py`의 쉼표 분할이 깨짐 → 쉼표로 결합. ② ASQA에서 인용 표시를 마침표 뒤에 붙여 `eval.py`가 다음 문장 것으로 읽음 → ALCE처럼 끝 문장부호(닫는 따옴표 포함) 앞에 삽입. 첫 M2 실행(501415)의 ASQA 수치는 ②로 무효, 재채점함.
+
+## E10 결과 (2026-09-30)
+
+**설정**: Fig. 6과 같은 PubMedQA 200건(`appendix_data.pkl`, `citation.py`의 문장 분할). 각 방법을 원문 → (문장 × 문서) 점수 행렬까지 측정, 특징 추출을 측정 구간에 포함.
+워밍업 1회 후 3회 중앙값, GPU 동기화 후 시계 정지. 모든 신경망은 배치 32(keyword NER pipeline도 32로 맞춤), dense/SPLADE는 fp32(논문 Fig. 3과 동일).
+모델 적재 시간은 두 번째(웜) 적재 기준 — 첫 적재는 NFS 읽기 속도가 섞임. 실행: `rebuttal/experiments/e10.sbatch` (job 504282), 원자료 `rebuttal/results/e10_efficiency.json`.
+
+E10 on appendix_data.pkl: 200 responses, 969 sentences, 3876 sentence-document pairs. GPU NVIDIA GeForce RTX 3090, median of 3 runs.
+
+| Method | Device | Model load (s) | Load peak GPU (MB) | Inference, 200 responses (s) | ms / sentence | Inference peak GPU (MB) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| keyword_jaccard (as Fig. 6: keywords precomputed) | cpu | 0.00 | 0 | 0.003 | 0.003 | 0 |
+| keyword_jaccard + extraction (domain) | gpu | 5.59 | 640 | 23.605 | 24.360 | 673 |
+| keyword_jaccard + extraction (general) | gpu | 1.39 | 223 | 7.719 | 7.966 | 247 |
+| full_token_jaccard | cpu | 0.00 | 0 | 1.023 | 1.056 | 0 |
+| citefix_intersection | cpu | 0.00 | 0 | 0.018 | 0.018 | 0 |
+| citefix_ksc | cpu | 0.00 | 0 | 0.026 | 0.027 | 0 |
+| tfidf | cpu | 0.00 | 0 | 0.411 | 0.424 | 0 |
+| bm25 | cpu | 0.00 | 0 | 0.335 | 0.346 | 0 |
+| dense gtr-t5-xxl | gpu | 11.42 | 18569 | 175.120 | 180.723 | 19851 |
+| dense gtr-t5-large | gpu | 5.65 | 1290 | 14.650 | 15.118 | 1438 |
+| splade (SPLADE++) | gpu | 1.49 | 428 | 5.638 | 5.818 | 603 |
+
+1. **Fig. 6의 결함 확인**: keyword를 미리 계산해 두고 재면 0.003초(논문 0.045초, 장비 차이). 추출을 포함하면 **7.7초(general) / 23.6초(domain)** — TF-IDF(0.41초)·BM25(0.34초)보다 **19–58× 느림**.
+2. **gtr-t5-xxl 대비 우위는 추출 포함해도 유지**: 추론 **22.7×(general) / 7.4×(domain) 빠름**, GPU 메모리 **80× / 29× 적음** (논문 Fig. 3 주장: 20.6× 빠름, 17.9× 적음).
+3. **SPLADE보다는 효율도 앞서지 않음**: SPLADE 추론 5.6초 · 603MB. 정확도도 SPLADE가 1위(M3).
+4. 1차 측정(job 504179)은 NER이 배치 1로 돌고, 이전 모델이 메모리에 남아 gtr-t5-large/SPLADE 메모리가 부풀려져 폐기. 폐기 전 참고치: 추출 포함 general 14.9초 / domain 45.0초.
+
+**Point 4 대응**: 문구는 "유사도 계산은 신경망 추론 없이 집합 연산만 쓰며, keyword 추출에 경량 BERT/BioBERT를 쓴다"로 한정. Fig. 6은 추출 포함 수치로 교체(또는 캡션에 제외 명시).
+효율성 주장은 **dense MIPS(gtr-t5-xxl) 대비**로 범위를 좁힌다. TF-IDF·BM25·SPLADE보다 빠르다고는 주장할 수 없다.
 
 ## 서버 이전 후 확정 사항 (2026-09-28)
 
@@ -314,9 +344,9 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 
 ## M4 — 효율성 재측정 · Point 4
 
-- [ ] E10 Appendix C.1(Fig. 6) 재측정 — **keyword 추출 시간 포함**, 모든 방법 동일 조건
+- [x] E10 Appendix C.1(Fig. 6) 재측정 — **keyword 추출 시간 포함**, 모든 방법 동일 조건 → "E10 결과"
 - [ ] ⛔ E11 Fig. 3 재측정 (캡션에 측정 범위 명시로 대체) — extractor load/inference 및 GPU 메모리 포함 (측정 스크립트 신규 작성 필요)
-- [ ] E10에 M3의 신규 baseline(SPLADE 포함) 시간 추가
+- [x] E10에 M3의 신규 baseline(SPLADE 포함) 시간 추가
 - [ ] 재측정 후에도 속도 우위가 유지되는지 확인 → 유지되지 않으면 효율성 주장의 강도를 조정
 
 ## M5 — 본문 수정

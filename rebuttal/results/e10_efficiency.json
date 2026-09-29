@@ -1,0 +1,168 @@
+{
+  "data": "appendix_data.pkl",
+  "responses": 200,
+  "sentences": 969,
+  "pairs": 3876,
+  "env": {
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "cpu": "x86_64",
+    "torch": "2.14.0+cu130",
+    "repeats": 3
+  },
+  "methods": {
+    "keyword_jaccard (as Fig. 6: keywords precomputed)": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 0.0026,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 0.0027,
+      "runs": [
+        0.0028,
+        0.0026,
+        0.0026
+      ],
+      "note": "extraction EXCLUDED -- reproduces the current figure"
+    },
+    "keyword_jaccard + extraction (domain)": {
+      "device": "gpu",
+      "load_seconds": 5.594,
+      "load_peak_gpu_mb": 639.5,
+      "inference_seconds": 23.6048,
+      "inference_peak_gpu_mb": 673.4,
+      "ms_per_sentence": 24.3599,
+      "runs": [
+        23.6048,
+        23.6062,
+        23.5931
+      ],
+      "note": "3 NER model(s), batch 32, extraction INCLUDED"
+    },
+    "keyword_jaccard + extraction (general)": {
+      "device": "gpu",
+      "load_seconds": 1.389,
+      "load_peak_gpu_mb": 222.7,
+      "inference_seconds": 7.7191,
+      "inference_peak_gpu_mb": 246.9,
+      "ms_per_sentence": 7.966,
+      "runs": [
+        7.717,
+        7.7191,
+        7.7396
+      ],
+      "note": "1 NER model(s), batch 32, extraction INCLUDED"
+    },
+    "full_token_jaccard": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 1.023,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 1.0557,
+      "runs": [
+        1.0202,
+        1.0254,
+        1.023
+      ],
+      "note": ""
+    },
+    "citefix_intersection": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 0.0177,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 0.0183,
+      "runs": [
+        0.0177,
+        0.0177,
+        0.0178
+      ],
+      "note": ""
+    },
+    "citefix_ksc": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 0.0265,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 0.0274,
+      "runs": [
+        0.0266,
+        0.0265,
+        0.0265
+      ],
+      "note": ""
+    },
+    "tfidf": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 0.4114,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 0.4245,
+      "runs": [
+        0.4114,
+        0.4108,
+        0.4143
+      ],
+      "note": ""
+    },
+    "bm25": {
+      "device": "cpu",
+      "load_seconds": 0.0,
+      "load_peak_gpu_mb": 0.0,
+      "inference_seconds": 0.3354,
+      "inference_peak_gpu_mb": 0.0,
+      "ms_per_sentence": 0.3461,
+      "runs": [
+        0.3354,
+        0.3356,
+        0.335
+      ],
+      "note": ""
+    },
+    "dense gtr-t5-xxl": {
+      "device": "gpu",
+      "load_seconds": 11.417,
+      "load_peak_gpu_mb": 18569.3,
+      "inference_seconds": 175.1203,
+      "inference_peak_gpu_mb": 19851.4,
+      "ms_per_sentence": 180.7227,
+      "runs": [
+        175.2771,
+        175.1203,
+        175.0152
+      ],
+      "note": "fp32, batch 32"
+    },
+    "dense gtr-t5-large": {
+      "device": "gpu",
+      "load_seconds": 5.648,
+      "load_peak_gpu_mb": 1290.2,
+      "inference_seconds": 14.6498,
+      "inference_peak_gpu_mb": 1438.5,
+      "ms_per_sentence": 15.1184,
+      "runs": [
+        14.6105,
+        14.6498,
+        14.6557
+      ],
+      "note": "fp32, batch 32"
+    },
+    "splade (SPLADE++)": {
+      "device": "gpu",
+      "load_seconds": 1.486,
+      "load_peak_gpu_mb": 427.9,
+      "inference_seconds": 5.6378,
+      "inference_peak_gpu_mb": 602.9,
+      "ms_per_sentence": 5.8182,
+      "runs": [
+        5.6252,
+        5.6378,
+        5.6382
+      ],
+      "note": "fp32, batch 32"
+    }
+  }
+}

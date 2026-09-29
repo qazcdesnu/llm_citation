@@ -121,6 +121,17 @@ def tfidf_cosine(sentences, documents, ctx: Context) -> np.ndarray:
 _GTR_MODELS: dict = {}
 
 
+def load_gtr(name: str = "gtr-t5-xxl"):
+    """Load (once) and return the sentence-transformers GTR model."""
+    import torch
+    from sentence_transformers import SentenceTransformer
+
+    if name not in _GTR_MODELS:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _GTR_MODELS[name] = SentenceTransformer(f"sentence-transformers/{name}", device=device)
+    return _GTR_MODELS[name]
+
+
 def dense_gtr(sentences, documents, ctx: Context, name: str = "gtr-t5-xxl") -> np.ndarray:
     """Baseline - the paper's dense MIPS comparison point (ALCE post-hoc, gtr-t5-xxl).
 
@@ -128,13 +139,7 @@ def dense_gtr(sentences, documents, ctx: Context, name: str = "gtr-t5-xxl") -> n
     inner product. ALCE's post_hoc_cite.py defaults to gtr-t5-large; the paper
     reports gtr-t5-xxl, so that is used here. Loaded once per process (fp32, ~19GB).
     """
-    import torch
-    from sentence_transformers import SentenceTransformer
-
-    if name not in _GTR_MODELS:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        _GTR_MODELS[name] = SentenceTransformer(f"sentence-transformers/{name}", device=device)
-    model = _GTR_MODELS[name]
+    model = load_gtr(name)
     docs = ctx.extras.get("dense_docs", documents)
     es = model.encode(list(sentences), normalize_embeddings=True, convert_to_numpy=True)
     ed = model.encode(list(docs), normalize_embeddings=True, convert_to_numpy=True)
@@ -142,6 +147,19 @@ def dense_gtr(sentences, documents, ctx: Context, name: str = "gtr-t5-xxl") -> n
 
 
 _SPLADE: dict = {}
+
+
+def load_splade(name: str = "naver/splade-cocondenser-ensembledistil"):
+    """Load (once) and return (tokenizer, model, device) for SPLADE."""
+    import torch
+    from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+    if name not in _SPLADE:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tok = AutoTokenizer.from_pretrained(name)
+        model = AutoModelForMaskedLM.from_pretrained(name).to(device).eval()
+        _SPLADE[name] = (tok, model, device)
+    return _SPLADE[name]
 
 
 def splade(sentences, documents, ctx: Context,
@@ -153,14 +171,8 @@ def splade(sentences, documents, ctx: Context,
     2022), the strongest public release, so the baseline is not a weak one.
     """
     import torch
-    from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-    if name not in _SPLADE:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        tok = AutoTokenizer.from_pretrained(name)
-        model = AutoModelForMaskedLM.from_pretrained(name).to(device).eval()
-        _SPLADE[name] = (tok, model, device)
-    tok, model, device = _SPLADE[name]
+    tok, model, device = load_splade(name)
 
     @torch.no_grad()
     def encode(texts, batch=32):
@@ -168,9 +180,11 @@ def splade(sentences, documents, ctx: Context,
         for i in range(0, len(texts), batch):
             enc = tok(list(texts[i:i + batch]), padding=True, truncation=True,
                       max_length=512, return_tensors="pt").to(device)
-            logits = model(**enc).logits                       # (b, len, vocab)
-            w = torch.log1p(torch.relu(logits)) * enc["attention_mask"].unsqueeze(-1)
+            w = model(**enc).logits                            # (b, len, vocab)
+            # in place: the (b, len, vocab) tensor is ~2GB at b=32, len=512
+            w.relu_().log1p_().mul_(enc["attention_mask"].unsqueeze(-1))
             out.append(w.max(dim=1).values.float().cpu())      # (b, vocab)
+            del w
         return torch.cat(out)
 
     qs, ds = encode(sentences), encode(documents)
