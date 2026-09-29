@@ -13,9 +13,10 @@
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
 > **실행 환경**: GSDS 서버(RTX 3090/4090 24GB). AutoAIS(T5-XXL 11B)는 GPU 2장으로 ALCE 코드 수정 없이 채점 가능 (`rebuttal/SERVER.md`).
-> 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`. PubMed 2023 baseline 다운로드 중(job 492514, `rebuttal/pubmed/`).
+> 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`. **공저자 원본 결과 확보**(`/shared/s3/lab03/juhyeonkim/ALCE/`, 아래 "공저자 원본 자료" 참조) — MedDialog Llama2 Chat 결과가 있어 벡터 DB 없이 재인용 가능.
+> PubMed 2023 baseline 다운로드는 MedDialog를 다른 모델로 확장할 때만 필요 (job 492514, `rebuttal/pubmed/`).
 >
-> **남은 블로커**: ① Llama-2 접근 승인 HF 토큰 ② OpenAI API 키(MedDialog GPT-4 평가, 2단계) ③ 공저자 확인 — 원본 생성 결과·FAISS DB 존재 여부, "year_partial" 의미, MedDialog baseline encoder
+> **남은 블로커**: ① Llama-2 접근 승인 HF 토큰 ② OpenAI API 키(MedDialog GPT-4 평가, 2단계) ③ 공저자 확인 — **CovidDialog GPT-4 점수가 어느 컬럼(`jaccard_output` vs `kw_jaccard_output`)으로 나왔는지**, FAISS DB 위치(공저자 폴더엔 없음), "year_partial" 의미, MedDialog baseline encoder, `asqa_comp.pkl`의 `ours_*` 컬럼 의미
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
 상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중 · 🅰 1단계 · 🅱 2단계
@@ -47,8 +48,14 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안을 검토했으�
 
 - **E10 · E11** 효율성 재측정 — keyword 추출 포함, SPLADE 포함. PubMedQA 200건(`appendix_data.pkl`). **Fig. 6 결함 때문에 제출 전 필수**
 - **E4** stemming on/off · **E6** threshold / top-*k* — ASQA에서 저비용 단계별 ablation
-- **MedDialog** — E5(BioBERT NER → general extractor) 및 의료 도메인 baseline 비교. 코퍼스 재구축 + GPT-4 평가가 필요해 가장 비쌈. 진행 여부는 1단계 결과와 남은 기간으로 결정
+- **MedDialog 다른 모델로 확장** — Llama2 Chat 외 모델은 원본 결과가 없어 코퍼스 재구축(PubMed 2023 복구분) + 재생성이 필요. 가장 비쌈. 진행 여부는 1단계 결과와 남은 기간으로 결정
 - **확장** — 생성 모델 9개 전체, ASQA 948 / QAMPARI 1000 전체 dev set
+
+### 🅰 1단계 추가 후보 — MedDialog (Llama2 Chat, 조건: OpenAI API 키)
+
+공저자 폴더의 원본 결과(`llama2_chat-meddialog-…-kwj-citation.pkl`)에 **생성 답변 61건 + 건당 검색 문서 15개**(PubMed 698 · Medline 217, 본문 포함)가 들어 있다.
+post-hoc 인용은 답변과 문서만 있으면 되므로 **벡터 DB 재구축 없이** 같은 답변 위에서 전 방법(dense · 제안 · E1–E3 · E7–E9)과 **E5**(BioBERT NER ↔ general extractor)를 돌릴 수 있다.
+Llama2 Chat은 사람 평가(Table 2)에 쓴 모델이라 대표성도 있다. 남는 비용은 GPT-4 쌍대 평가뿐이다.
 
 MedDialog를 끝내 수행하지 못하면 E5가 빠진다. 논문 Limitations가 이미 "extractor 선택에 대한 민감도는 정량화하지 않았다"고 인정하므로 rebuttal에서 이 한계로 답한다.
 
@@ -60,9 +67,14 @@ MedDialog를 끝내 수행하지 못하면 E5가 빠진다. 논문 Limitations�
 2. **샘플은 논문과 동일하게.** 논문의 100건은 ALCE `run.py --quick_test 100`(seed 42 무작위 추출)으로 추정. 현재 `--limit`은 앞에서 N건을 자르므로 다름 → 수정 필요.
 3. **dense baseline은 직접 재실행.** Table 1 baseline은 "ALCE 보고 수치"를 가져온 것이고, ALCE `post_hoc_cite.py`의 기본 retriever는 논문이 말하는 gtr-t5-xxl이 아니라 **gtr-t5-large**다. 같은 생성 답변에 `--retriever gtr-t5-xxl`로 재실행해 비교 조건을 맞춘다.
 4. **`main.py`는 MedDialog 전용.** PubMed/Medline FAISS 검색 → 생성 → pkl. ASQA/QAMPARI에 keyword 인용을 적용한 코드는 저장소에 없다.
-5. **MedDialog baseline이 논문 설명과 다를 가능성.** `citation.py`의 gtr 경로는 `H` 미정의로 실행 불가, `run_2.sh`는 `--encoder bert-base-uncased --top_k 6`. 논문은 gtr-t5-xxl · top 15. 공저자 확인 필요, 재실험은 gtr-t5-xxl로.
-6. **MedDialog 코퍼스는 공식 경로로 재현 불가.** PubMed 2023 baseline은 NCBI FTP에서 삭제, MBR(`mbr.nlm.nih.gov`)은 미해결. Wayback Machine에 1165/1166 파일이 원본 md5 그대로 남아 있어 복구 중이며, 빠진 `pubmed23n0673`은 2026 baseline의 같은 PMID 범위로 대체 (`rebuttal/pubmed/README.md`).
+5. **MedDialog baseline이 논문 설명과 다를 가능성.** `citation.py`의 gtr 경로는 `H` 미정의로 실행 불가, `run_2.sh`는 `--encoder bert-base-uncased --top_k 6`. 논문은 gtr-t5-xxl · top 15. *원본 결과로 확인: 검색 문서는 건당 15개 → top 15가 맞고 `run_2.sh`의 6은 이후 수정본.* baseline encoder는 원본 `vanilla_output`과 bert-base / gtr-t5-xxl 재계산 결과를 대조해 판별 가능. 재실험은 gtr-t5-xxl로.
+6. **MedDialog 코퍼스는 공식 경로로 재현 불가** (Llama2 Chat 외 모델로 확장할 때만 필요). PubMed 2023 baseline은 NCBI FTP에서 삭제, MBR(`mbr.nlm.nih.gov`)은 미해결. Wayback Machine에 1165/1166 파일이 원본 md5 그대로 남아 있어 복구 중이며, 빠진 `pubmed23n0673`은 2026 baseline의 같은 PMID 범위로 대체 (`rebuttal/pubmed/README.md`).
 7. **데이터셋 배정.** ASQA·QAMPARI = 1단계 전 비교(객관적 NLI 지표). MedDialog = E5 및 도메인 비교(2단계). ASQA/QAMPARI는 원래 general extractor를 쓰므로 그 위의 E5는 성립하지 않아 제외. PubMedQA 200건 = E10·E11.
+8. **논문의 "MedDialog 61건"은 CovidDialog-English다** (2026-09-29 확인). `code/code/Citations/dataset/meddialog-test.json` 61건의 description · 환자 발화 · 의사 발화가 **61/61 모두** CovidDialog-English 원문(`COVID-Dialogue-Dataset-English.txt`, 603건)에 존재. 건수(61 대화 · 122 발화 · 전부 2턴)가 CovidDialog 논문 Table 3의 English **test split**(Train 482 / Val 60 / Test 61)과 일치하고, 61건 중 35건이 COVID 언급. 공저자 폴더의 `meddialog.json`(MedDialog-EN HealthCareMagic 229,674건)과는 겹침 0. 공식 split 파일과의 1:1 대조는 원 저장소(`UCSD-AI4H/COVID-Dialogue`)가 내려가 미실시 — 건수 일치로 test split으로 판단.
+9. **GPT(OpenAI API)는 CovidDialog 평가에만 필요** (2026-09-29 확인). ALCE `eval.py`는 OpenAI 호출 없이 로컬 T5-XXL NLI로 채점하고, ASQA/QAMPARI 생성도 공개 모델(HF 토큰만 필요)이다. GPT-4는 `GPT4_evaluation.ipynb`의 CovidDialog 쌍대 평가(`gpt-4-1106-preview`, A/B 익명, 4점 척도)에만 쓰였다. §3 Fig. 4의 GPT-4는 생성 모델이라 재실행 불필요.
+   - `gpt-4-1106-preview`의 현재 가용성 확인 필요. 다른 모델로 바꾸면 baseline까지 전부 새 모델로 재채점하고 기존 점수와 섞지 않는다. 비용은 61건 × 방법 약 7개 ≈ 400–500회 호출.
+   - GPT 없는 보조 지표로 CovidDialog 인용에도 AutoAIS(NLI) 채점 가능. 단 ALCE citation recall은 미인용 문장을 감점해 chit-chat을 인용하지 않는 제안 방법에 불리하므로 대체가 아닌 보조로만 쓴다.
+10. **⚠️ CovidDialog GPT-4 평가의 제안 방법 컬럼이 불명확.** 공개 노트북은 `eval_cite_together(dataset, 'vanilla_output', 'jaccard_output', ...)`로 평가하는데, 현재 `citation.py`에서 `jaccard_output`은 **full-token Jaccard**이고 제안 방법은 `kw_jaccard_output`이다. 공저자의 이전 결과 `jaccard_key.csv`(2024-01-13)에는 `kw_jaccard_output` 컬럼이 없고 그 `jaccard_output`은 chit-chat을 인용하지 않는 등 제안 방법처럼 동작 → 버전에 따라 컬럼 의미가 바뀐 것으로 보이며, 논문 점수는 제안 방법으로 매겼을 가능성이 높다. Point 2와 직결되므로 공저자 확인 필수. 재실험에서는 `kw_jaccard_output`(제안)과 `jaccard_output`(E1)을 명시적으로 구분한다.
 
 ## 순서가 중요한 이유
 
@@ -90,6 +102,22 @@ Point 5 (CiteFix 확인) ──┼──> 실험 목록/측정 프로토콜 확�
 > **Point 4의 라벨은 `본문 수정`에서 `실험 수행`으로 올려야 할 가능성이 높습니다.** 위 3번 때문에 문구 수정만으로는 방어되지 않고 재측정이 필요합니다. Fig. 3(모델 로드/추론 시간·GPU 메모리)의 측정 스크립트는 저장소에 아예 없어(`grep` 결과 타이밍 코드는 `processing_time.ipynb`가 유일) 포함 여부를 코드로 확인할 수 없습니다. M0-2에서 먼저 확정하세요.
 
 ---
+
+## 공저자 원본 자료 (2026-09-28 확인)
+
+`/shared/s3/lab03/juhyeonkim/ALCE/` (2023-12 ~ 2024-01 작업 공간, 공저자 허락하에 읽기 전용으로 확인).
+
+| 파일 | 내용 | 논문과의 관계 |
+| --- | --- | --- |
+| `llama2_chat-meddialog-singleturn-vanilla-no_entity-kwj-citation.pkl` | MedDialog 61건, Llama2 Chat 생성 답변 + 검색 문서 15개/건 + 인용 방식 9종 컬럼(`vanilla`·`jaccard`·`kw_jaccard`·`causal`·`ensemble_*`) | **Table 1·2 MedDialog(Llama2 Chat)의 원본 결과.** 입력이 `meddialog-test.json` 60/60 고유 대화와 일치 |
+| `jaccard_key.csv`, `Daniel_1.csv`, `Jeongsu_1.csv`, `Human Evaluation Ver.ipynb` | 위 결과의 csv, 사람 평가 시트 | Table 2 사람 평가 자료 |
+| `asqa_comp.pkl` | ASQA 948건(전체 dev), `vanilla_output`(ALCE 방식 `Document [n]` 인용) · `ours_threshold` · `ours_all` | ASQA 원본 결과로 추정. `ours_*` 텍스트가 생성 답변이 아니라 문서 문장처럼 보여 **의미 확인 필요**. Table 1 baseline이 ALCE post-hoc인지 in-context(VANILLA) 인용인지 판별 근거가 될 수 있음 |
+| `llama2-pubmedqa-ner-entity-kwj-citation_ver2.pkl` | PubMedQA 질문 100건, keyword 프롬프트 단일 턴 QA, 문서 15개/건 | 논문 표에 없음. Appendix C.1 200건과 질문 18개만 겹치고 답변은 불일치 → **C.1 데이터와 다른 실행** |
+| `mesh_dialogues.json`(260), `combined_data.json`(1260) | PubMed 연구 기반 LLM 작성 다주제 대화 | 논문 결과에 사용 흔적 없음 |
+| `pub_*.csv`, `toge_*.csv` | GPT-4 평가 출력 텍스트 | 대응 실험 미확인 |
+| FAISS 벡터 DB | — | ❌ 없음 |
+
+**`pubmed_dialog/`(PubMedQA 템플릿 대화, lab06 작성)는 논문 결과에 쓰이지 않았다.** MedDialog 61건과 겹침 0, PubMedQA 실행도 대화 템플릿이 아닌 단일 턴 질문을 입력으로 썼다.
 
 ## M0 — 진단 및 범위 확정  ✅ 완료 (2026-09-21)
 
@@ -186,7 +214,7 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 | 필요한 것 | 용도 | 현재 상태 (2026-09-28) |
 | --- | --- | --- |
 | ALCE ASQA / QAMPARI 데이터 | recall/precision 계산 | 노트북에만 있음 → 서버 `$ALCE_DIR`에 재설치 필요 |
-| `main.py` 실행 결과 pkl (`result/*.pkl`) | MedDialog 원본 생성 결과 | 저장소에 없음. 공저자 확인 중. 없으면 재생성(2단계) |
+| `main.py` 실행 결과 pkl (`result/*.pkl`) | MedDialog 원본 생성 결과 | ✅ Llama2 Chat분 공저자 폴더에서 확보. 나머지 모델은 없음 |
 | ~~24GB+ VRAM GPU~~ | AutoAIS 채점 | ✅ GSDS 3090 × 2장으로 해결 |
 | BioBERT NER · keyword extractor 모델 | E4·E5·E10 | HF에서 다운로드 (`HF_HOME`은 공용 디렉토리) |
 | Llama-2 접근 승인 HF 토큰 | 🅰 생성 답변 | 미확인 |
@@ -230,6 +258,7 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [ ] M2 ablation 표 본문 삽입 *(Point 3)*
 - [ ] M3 baseline 비교 표 본문 삽입 *(Point 1)*
 - [ ] Appendix B "ablation study" → "model sweep" 등으로 용어 정정
+- [ ] **"MedDialog" 데이터셋 명칭·인용 정정** — 실제 사용 데이터는 MedDialog(Zeng et al., 2020, [29])가 아니라 **CovidDialog-English**(Ju et al., "On the Generation of Medical Dialogues for COVID-19", arXiv:2005.05442 / ACL 2021 short). §3·§5.1·Table 1·2·4·Fig. 4·Appendix A의 "MedDialog" 표기와 인용 [29]를 교체하거나 "CovidDialog-English (UCSD MedDialog 프로젝트)"로 명시. 결과 수치는 변동 없음. 근거는 아래 "서버 이전 후 확정 사항" 8번
 - [ ] 결과가 바뀐 부분에 맞춰 Abstract / Introduction 주장 강도 조정
 
 ## M6 — Rebuttal letter 작성
@@ -248,5 +277,5 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 | M4 재측정 후 속도 우위가 크게 줄어듦 | 논문의 핵심 셀링포인트인 효율성 주장 약화 | M0-2에서 조기에 확인. 우위가 남는 범위(유사도 계산 단계)로 주장을 재정의 |
 | M2에서 full-token Jaccard가 keyword Jaccard와 비슷한 성능 | 논문의 중심 주장(keyword 선택이 기여) 자체가 흔들림 | 가장 먼저 확인해야 하는 이유. 결과에 따라 기여도 재서술 필요 |
 | 재실행 결과가 Table 1과 방향이 다름 | 기존 결과의 신뢰성 문제로 번짐 | 새 생성 답변 위 제안 방법 vs 재실행 baseline의 방향 일치를 M1 게이트로 둠. 불일치 시 원인(샘플·생성 설정·baseline encoder)부터 규명 |
-| MedDialog 재현 불가(코퍼스·원본 결과 부재) | E5 및 도메인 비교 누락 | 2단계로 분리. 못 하면 Limitations의 기존 인정으로 대응 |
+| MedDialog 다른 모델 재현 불가(코퍼스·원본 결과 부재) | 도메인 비교가 Llama2 Chat 1개 모델로 한정 | Llama2 Chat 원본 결과로 전 방법·E5 수행(1단계 후보). 확장은 2단계 |
 | ~~CiteFix 코드 미공개~~ (M0에서 확정) | 원 데이터 기준 비교 불가 | 우리 데이터셋에 §3.1/§3.2 재구현(E2·E3), rebuttal에 사유 명시 |
