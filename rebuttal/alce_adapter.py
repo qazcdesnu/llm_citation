@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -33,7 +34,32 @@ def set_alce_dir(path) -> None:
     DATA = ALCE_DIR / "data"
 
 
-def load(dataset: str, retriever: str = "gtr", limit: int | None = None) -> list[dict]:
+def remove_citations(sent: str) -> str:
+    """Copied from ALCE utils.py so stripped text matches what eval.py scores."""
+    return re.sub(r"\[\d+", "", re.sub(r" \[\d+", "", sent)).replace(" |", "").replace("]", "")
+
+
+def load(dataset: str, retriever: str = "gtr", limit: int | None = None,
+         result: str | Path | None = None) -> list[dict]:
+    """ALCE eval items.
+
+    Without `result`: the raw eval file (gold `answer`, top-100 docs, no generation).
+    With `result`: a run.py output (`result/*.json`) -- the sample run.py drew
+    (`--quick_test`, `--seed`), its generated `output`, and the `ndoc` docs that
+    were in the prompt. Citation markers the generator wrote are stripped, so every
+    method re-cites the same text; the original is kept as `output_raw`.
+    """
+    if result is not None:
+        path = Path(result).expanduser()
+        if not path.exists():
+            sys.exit(f"ALCE result file not found: {path}")
+        items = json.load(open(path))["data"]
+        for it in items:
+            out = it["output"][0] if isinstance(it["output"], list) else it["output"]
+            it["output_raw"] = out
+            it["output"] = remove_citations(out).strip()
+        return items[:limit] if limit else items
+
     path = DATA / f"{dataset}_eval_{retriever}_top100.json"
     if not path.exists():
         sys.exit(f"ALCE data not found: {path}\n"
@@ -82,9 +108,10 @@ def cite_item(item, dataset, scorer, top_k, temperature, threshold,
     raw = SCORERS[scorer](sentences, contents, ctx)
     picks = assign(softmax(raw, temperature), threshold)
 
-    out = " ".join(
-        s if p < 0 else f"{s} [{int(p) + 1}]" for s, p in zip(sentences, picks)
-    )
+    cited = [s if p < 0 else f"{s} [{int(p) + 1}]" for s, p in zip(sentences, picks)]
+    # QAMPARI units are comma-separated answers; eval.py re-splits on ",", so the
+    # commas must survive ("A [1], B [2]."). ASQA sentences are space-joined.
+    out = ", ".join(cited) + "." if dataset == "qampari" else " ".join(cited)
     new = dict(item)
     new["docs"] = docs
     new["output"] = out
@@ -92,8 +119,11 @@ def cite_item(item, dataset, scorer, top_k, temperature, threshold,
 
 
 def build(dataset, scorer, top_k=5, temperature=0.05, threshold=0.0,
-          limit=None, retriever="gtr", text_field="answer", keyword_cache=None):
-    items = load(dataset, retriever, limit)
+          limit=None, retriever="gtr", text_field="answer", keyword_cache=None,
+          result=None):
+    items = load(dataset, retriever, limit, result)
+    if keyword_cache is not None:
+        check_cache_alignment(items, keyword_cache)
     data, dropped = [], 0
     for idx, it in enumerate(items):
         kw = keyword_cache[idx] if keyword_cache is not None and idx < len(keyword_cache) else None
@@ -107,9 +137,21 @@ def build(dataset, scorer, top_k=5, temperature=0.05, threshold=0.0,
         "temperature": temperature, "threshold": threshold,
         "text_field": text_field, "retriever": retriever,
         "keyword_cache": bool(keyword_cache),
+        "result": str(result) if result else None,
         "note": "citations assigned post-hoc by rebuttal/alce_adapter.py",
     }
     return {"args": config, "data": data}, dropped
+
+
+def check_cache_alignment(items, cache) -> None:
+    """The keyword cache is matched to items by position; fail loudly if it drifts."""
+    if len(cache) != len(items):
+        sys.exit(f"keyword cache has {len(cache)} entries but input has {len(items)} items "
+                 "-- was it built from the same file (--result) and --limit?")
+    for i, (it, entry) in enumerate(zip(items, cache)):
+        q = entry.get("question")
+        if q is not None and q != it["question"]:
+            sys.exit(f"keyword cache misaligned at item {i}: {q[:60]!r} != {it['question'][:60]!r}")
 
 
 def write(payload, out_dir: Path, name: str) -> Path:

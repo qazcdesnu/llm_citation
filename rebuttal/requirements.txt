@@ -1,7 +1,10 @@
-# CPU subset -- verified locally.
+# Environment for rebuttal/ and ALCE (eval.py, run.py, post_hoc_cite.py).
+# On GSDS this is installed by setup/setup_env.sbatch; see SERVER.md.
 #   conda create -n llmcite python=3.11 -y && conda activate llmcite
 #   pip install -r requirements.txt
 #   python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt'); nltk.download('punkt_tab')"
+
+# CPU scoring path -- verified locally
 pandas<2.3
 numpy<2
 nltk
@@ -9,9 +12,16 @@ scikit-learn
 rank_bm25
 langchain-core      # required to unpickle the stored Document objects
 
-# GPU additions -- needed for extract_keywords.py, measure_efficiency.py and
-# ALCE's eval.py. See SERVER.md for the VRAM/disk requirements.
-# torch
-# transformers
-# sentence-transformers
-# accelerate
+# GPU path: extract_keywords.py, measure_efficiency.py, SPLADE, ALCE generation/scoring
+torch
+transformers
+accelerate
+sentence-transformers
+sentencepiece       # T5 tokenizer for the AutoAIS NLI model and gtr-t5-*
+protobuf
+
+# ALCE imports
+rouge-score         # eval.py
+mauve-text          # eval.py --mauve (ASQA)
+pyyaml              # run.py configs
+openai              # run.py imports it at module load even for local models

@@ -88,10 +88,10 @@ def extract(texts: list[str], pipes, stem: bool = True) -> list[set[str]]:
 
 
 def run(dataset: str, split_field: str, extractor: str, stem: bool,
-        top_k: int, limit: int | None, out_path: Path, device: int):
+        top_k: int, limit: int | None, out_path: Path, device: int, result=None):
     import alce_adapter as A
 
-    items = A.load(dataset, limit=limit)
+    items = A.load(dataset, limit=limit, result=result)
     pipes = build_pipelines(extractor, device=device)
 
     cache = []
@@ -101,6 +101,7 @@ def run(dataset: str, split_field: str, extractor: str, stem: bool,
         contents = [f"{d['title']} {d['text']}" for d in docs]
         cache.append({
             "sample_id": it.get("sample_id", it["question"][:64]),
+            "question": it["question"],  # alce_adapter.check_cache_alignment
             "keyword_sentences": extract(sentences, pipes, stem),
             "keyword_documents": extract(contents, pipes, stem),
         })
@@ -121,7 +122,9 @@ def self_check():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="asqa", choices=["asqa", "qampari"])
-    ap.add_argument("--field", default="answer", help="which text to cite (answer | output)")
+    ap.add_argument("--field", default=None,
+                    help="which text to cite (answer | output); default: output with --result, else answer")
+    ap.add_argument("--result", default=None, help="ALCE run.py output JSON (generated answers)")
     ap.add_argument("--extractor", default="general", choices=["domain", "general"])
     ap.add_argument("--no-stem", action="store_true", help="E4 ablation")
     ap.add_argument("--top-k", type=int, default=5)
@@ -135,8 +138,10 @@ def main():
         return self_check()
 
     stem = not a.no_stem
-    name = a.out or f"cache/{a.dataset}-{a.extractor}-{'stem' if stem else 'nostem'}-top{a.top_k}.pkl"
-    run(a.dataset, a.field, a.extractor, stem, a.top_k, a.limit, Path(name), a.device)
+    field = a.field or ("output" if a.result else "answer")
+    src = "gen" if a.result else "gold"
+    name = a.out or f"cache/{a.dataset}-{src}-{a.extractor}-{'stem' if stem else 'nostem'}-top{a.top_k}.pkl"
+    run(a.dataset, field, a.extractor, stem, a.top_k, a.limit, Path(name), a.device, a.result)
 
 
 if __name__ == "__main__":

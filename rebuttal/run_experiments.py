@@ -4,13 +4,18 @@ Scoring calls ALCE's own eval.py, so the numbers are produced by the same
 protocol the paper already used.  That step loads google/t5_xxl_true_nli_mixture
 (T5-XXL, 11B) and is the only part needing a large GPU -- see SERVER.md.
 
-  # CPU: build citation files for the lexical baselines
-  python run_experiments.py --build --methods full_token_jaccard,citefix_intersection,tfidf,bm25
+Inputs are LLM-generated answers from ALCE's run.py (`--result DATASET=PATH`);
+without --result the gold `answer` of the raw eval file is cited instead.
 
-  # GPU: cache keywords, then build the proposed method too
-  python extract_keywords.py --dataset asqa --extractor general
-  python run_experiments.py --build --methods keyword_jaccard \
-      --keyword-cache cache/asqa-general-stem-top5.pkl
+  # CPU: build citation files for the lexical baselines
+  python run_experiments.py --build --datasets asqa \
+      --result asqa=$ALCE_DIR/result/asqa-....json \
+      --methods full_token_jaccard,citefix_intersection,citefix_ksc,tfidf,bm25
+
+  # GPU: cache keywords from the same file, then build the proposed method too
+  python extract_keywords.py --dataset asqa --extractor general --result $ALCE_DIR/result/asqa-....json
+  python run_experiments.py --build --datasets asqa --result asqa=$ALCE_DIR/result/asqa-....json \
+      --methods keyword_jaccard --keyword-cache cache/asqa-gen-general-stem-top5.pkl
 
   # GPU: score everything
   python run_experiments.py --eval
@@ -33,15 +38,30 @@ ALL_METHODS = ["keyword_jaccard", "full_token_jaccard", "citefix_intersection",
                "citefix_ksc", "tfidf", "bm25"]
 
 
+def parse_results(specs):
+    """--result asqa=path --result qampari=path  ->  {dataset: path}"""
+    out = {}
+    for spec in specs or []:
+        dataset, _, path = spec.partition("=")
+        if not path:
+            sys.exit(f"--result expects DATASET=PATH, got {spec!r}")
+        out[dataset] = path
+    return out
+
+
 def do_build(args):
     cache = pickle.load(open(args.keyword_cache, "rb")) if args.keyword_cache else None
+    results = parse_results(args.result)
     for dataset in args.datasets.split(","):
+        result = results.get(dataset)
+        field = args.field or ("output" if result else "answer")
+        src = "gen" if result else "gold"
         for method in args.methods.split(","):
             payload, dropped = A.build(
                 dataset, method, top_k=args.top_k, temperature=args.temperature,
-                threshold=args.threshold, limit=args.limit, text_field=args.field,
-                keyword_cache=cache)
-            name = f"{dataset}-{method}-top{args.top_k}-t{args.temperature}-th{args.threshold}"
+                threshold=args.threshold, limit=args.limit, text_field=field,
+                keyword_cache=cache, result=result)
+            name = f"{dataset}-{src}-{method}-top{args.top_k}-t{args.temperature}-th{args.threshold}"
             path = A.write(payload, RUNS, name)
             print(f"  {dataset:8s} {method:22s} items={len(payload['data']):4d} "
                   f"dropped={dropped:3d} -> {path.name}")
@@ -70,7 +90,10 @@ def main():
     ap.add_argument("--eval", action="store_true")
     ap.add_argument("--datasets", default="asqa,qampari")
     ap.add_argument("--methods", default=",".join(m for m in ALL_METHODS if m != "keyword_jaccard"))
-    ap.add_argument("--field", default="answer", help="answer (gold) or output (generated)")
+    ap.add_argument("--field", default=None,
+                    help="answer (gold) or output (generated); default: output with --result, else answer")
+    ap.add_argument("--result", action="append", metavar="DATASET=PATH",
+                    help="ALCE run.py output JSON with generated answers, e.g. asqa=result/asqa-....json")
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--temperature", type=float, default=0.05)
     ap.add_argument("--threshold", type=float, default=0.0)
