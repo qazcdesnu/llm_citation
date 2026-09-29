@@ -141,6 +141,42 @@ def dense_gtr(sentences, documents, ctx: Context, name: str = "gtr-t5-xxl") -> n
     return (es @ ed.T).astype(float)
 
 
+_SPLADE: dict = {}
+
+
+def splade(sentences, documents, ctx: Context,
+           name: str = "naver/splade-cocondenser-ensembledistil") -> np.ndarray:
+    """E9 - SPLADE: learned sparse term weights over the vocabulary, dot product.
+
+    Standard SPLADE pooling: max over tokens of log(1 + ReLU(MLM logits)), masked.
+    The paper cites SPLADE [16]; this uses the SPLADE++ checkpoint (Formal et al.
+    2022), the strongest public release, so the baseline is not a weak one.
+    """
+    import torch
+    from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+    if name not in _SPLADE:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tok = AutoTokenizer.from_pretrained(name)
+        model = AutoModelForMaskedLM.from_pretrained(name).to(device).eval()
+        _SPLADE[name] = (tok, model, device)
+    tok, model, device = _SPLADE[name]
+
+    @torch.no_grad()
+    def encode(texts, batch=32):
+        out = []
+        for i in range(0, len(texts), batch):
+            enc = tok(list(texts[i:i + batch]), padding=True, truncation=True,
+                      max_length=512, return_tensors="pt").to(device)
+            logits = model(**enc).logits                       # (b, len, vocab)
+            w = torch.log1p(torch.relu(logits)) * enc["attention_mask"].unsqueeze(-1)
+            out.append(w.max(dim=1).values.float().cpu())      # (b, vocab)
+        return torch.cat(out)
+
+    qs, ds = encode(sentences), encode(documents)
+    return (qs @ ds.T).numpy().astype(float)
+
+
 def bm25(sentences, documents, ctx: Context) -> np.ndarray:
     """E8 - BM25 with each sentence as the query over the retrieved set."""
     from rank_bm25 import BM25Okapi
@@ -157,6 +193,7 @@ SCORERS = {
     "citefix_ksc": citefix_ksc,  # E3
     "tfidf": tfidf_cosine,  # E7
     "bm25": bm25,  # E8
+    "splade": splade,  # E9
 }
 
 

@@ -1,13 +1,13 @@
 # Rebuttal 진행 계획
 
-> **현재 상태** (2026-09-29) — M0·M1 완료, M2 결과 나옴(**E1 게이트: 핵심 주장 미지지 → 재서술 검토 중**) · **범위: rebuttal 최소 조건**
+> **현재 상태** (2026-09-29) — M0·M1 완료, M2·M3 결과 나옴(**E1 게이트: 핵심 주장 미지지 → 재서술 검토 중**), 남은 실험은 E10 · **범위: rebuttal 최소 조건**
 >
 > | 단계 | 내용 | 상태 |
 > | --- | --- | --- |
 > | M0 | 진단 및 범위 확정 | ✅ 완료 |
 > | M1 | 평가 하네스 정비 | ✅ 완료 — 환경(transformers<5), 생성 답변 입력, GPU 2장 AutoAIS 검증 |
 > | M2 | E1–E3 (full-token Jaccard, CiteFix) | ✅ 실행 완료 (아래 "M2 결과") — E4–E6은 **범위 제외** |
-> | M3 | 신규 baseline (E7–E9) | 🔄 E7·E8 완료(M2와 함께 실행), **E9 SPLADE 남음** |
+> | M3 | 신규 baseline (E7–E9) | ✅ 완료 — E9 SPLADE가 두 데이터셋 1위 (ASQA 60.8 · QAMPARI 17.7) |
 > | M4 | 효율성 재측정 | ⬜ 대기 — **E10만**, E11은 범위 제외 |
 > | M5 | 본문 수정 | ⬜ 대기 |
 > | M6 | Rebuttal letter | ⬜ 대기 |
@@ -69,7 +69,7 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 
 **설정**: Llama2-7B Chat, ALCE VANILLA 프롬프트(5 docs, 2-shot)로 ASQA·QAMPARI 각 100건 생성(`quick_test 100`, seed 42). 생성기가 붙인 인용을 지우고,
 모든 방법이 같은 답변 · 같은 5개 문서 · **threshold 0**(문장마다 argmax 문서를 인용)으로 재인용. QAMPARI는 모든 방법이 "질문 + 답변"으로 점수 계산. ALCE `eval.py --citations`(AutoAIS)로 채점.
-실행: `rebuttal/experiments/m2.sbatch` (job 501415 → 501873 → 501970). 표: `rebuttal/results/m2_scores.md`.
+실행: `rebuttal/experiments/m2.sbatch` (job 501415 → 501873 → 501970), E9는 `experiments/m3_splade.sbatch` (job 503950, 같은 생성 답변). 표: `rebuttal/results/m2_scores.md`.
 
 ### ASQA
 
@@ -83,6 +83,7 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 | E3 CiteFix §3.2 KSC | 55.1 | 55.1 | 55.1 |
 | E7 TF-IDF | 52.3 | 52.3 | 52.3 |
 | E8 BM25 | 48.6 | 48.6 | 48.6 |
+| E9 SPLADE | 60.8 | 60.8 | 60.8 |
 | Generator's own in-context citations (reference) | 56.0 | 50.0 | 52.8 |
 | ALCE post_hoc_cite gtr-t5-xxl (reference) | 56.3 | 56.3 | 56.3 |
 
@@ -98,6 +99,7 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 | E3 CiteFix §3.2 KSC | 12.9 | 12.9 | 12.9 |
 | E7 TF-IDF | 13.8 | 13.8 | 13.8 |
 | E8 BM25 | 13.3 | 13.3 | 13.3 |
+| E9 SPLADE | 17.7 | 17.7 | 17.7 |
 | Generator's own in-context citations (reference) | 10.6 | 10.9 | 10.8 |
 | ALCE post_hoc_cite gtr-t5-xxl (reference) | 14.0 | 14.0 | 14.0 |
 
@@ -112,6 +114,11 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 | 제안 vs E1 full-token | 53.3 < 56.1 | 10.8 > 10.2 |
 | 제안 vs dense post-hoc | 53.3 < 56.3 | 10.8 < 14.0 |
 | 제안 vs VANILLA(생성기 자체 인용) | F1 53.3 > 52.8 | 10.8 = 10.8 |
+
+**E9 SPLADE (M3, 2026-09-29)**: `naver/splade-cocondenser-ensembledistil`(SPLADE++), max-pooled log(1+ReLU(MLM logits)) 내적, 같은 공통 경로.
+**두 데이터셋 모두 1위** (ASQA 60.8 · QAMPARI 17.7; dense 대비 +4.5 · +3.7, 제안 방법 대비 +7.5 · +6.9).
+제안 방법 순위: 9개 방법 중 ASQA 6위 · QAMPARI 7위. 리뷰어가 명시한 세 방법 중 ASQA에서는 BM25·TF-IDF보다 높고, QAMPARI에서는 셋 모두보다 낮다.
+SPLADE는 BERT 크기 MLM 추론이 필요하므로, 재서술 시 제안 방법의 차별점은 효율성 쪽으로 좁혀지며 **E10에 SPLADE 비용을 반드시 포함**해야 한다. 논문 §6 Future work가 이미 SPLADE식 확장을 언급하므로 한계·향후 방향으로 연결 가능.
 
 주의: 생성 모델 1개 · 100건. ALCE가 보고한 Llama2-7B Chat VANILLA의 seed 간 표준편차가 ASQA 인용 재현율 ±4.5이므로 2–3점 차이는 통계적으로 확정적이지 않다.
 
@@ -300,9 +307,9 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 
 - [x] E7 TF-IDF citation baseline — 우리 구현 ✅, ALCE `post_hoc_cite.py --retriever tfidf`와 교차 확인
 - [x] E8 BM25 citation baseline (`rank_bm25`) — 고정된 retrieved 문서 집합 위에서 문장별 점수화
-- [ ] **E9 SPLADE citation baseline** — 유일한 신규 구현. 모델 선정 및 sparse 표현 → score_matrix 변환
+- [x] **E9 SPLADE citation baseline** — `baselines.splade` (SPLADE++). ASQA 60.8 · QAMPARI 17.7
 - [x] ~~CiteFix 재현 여부 결정~~ → M2(E2·E3)로 이동, M0에서 확정
-- [ ] ASQA·QAMPARI 인용 품질 표 작성 (제안 방법 · dense MIPS · E1–E3 · E7–E9)
+- [x] ASQA·QAMPARI 인용 품질 표 작성 (제안 방법 · dense MIPS · E1–E3 · E7–E9) → `rebuttal/results/m2_scores.md`
 - [ ] §2의 "네 가지 차별점" 주장이 수치로 뒷받침되는지 검토 — 안 되는 항목은 주장을 완화
 
 ## M4 — 효율성 재측정 · Point 4

@@ -10,6 +10,7 @@
 | E3 CiteFix §3.2 KSC | 55.1 | 55.1 | 55.1 |
 | E7 TF-IDF | 52.3 | 52.3 | 52.3 |
 | E8 BM25 | 48.6 | 48.6 | 48.6 |
+| E9 SPLADE | 60.8 | 60.8 | 60.8 |
 | Generator's own in-context citations (reference) | 56.0 | 50.0 | 52.8 |
 | ALCE post_hoc_cite gtr-t5-xxl (reference) | 56.3 | 56.3 | 56.3 |
 
@@ -25,6 +26,7 @@
 | E3 CiteFix §3.2 KSC | 12.9 | 12.9 | 12.9 |
 | E7 TF-IDF | 13.8 | 13.8 | 13.8 |
 | E8 BM25 | 13.3 | 13.3 | 13.3 |
+| E9 SPLADE | 17.7 | 17.7 | 17.7 |
 | Generator's own in-context citations (reference) | 10.6 | 10.9 | 10.8 |
 | ALCE post_hoc_cite gtr-t5-xxl (reference) | 14.0 | 14.0 | 14.0 |
 

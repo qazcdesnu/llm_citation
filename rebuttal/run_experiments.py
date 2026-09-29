@@ -35,7 +35,7 @@ import alce_adapter as A  # noqa: E402
 HERE = Path(__file__).parent
 RUNS = HERE / "runs"
 ALL_METHODS = ["dense_gtr_xxl", "keyword_jaccard", "full_token_jaccard",
-               "citefix_intersection", "citefix_ksc", "tfidf", "bm25"]
+               "citefix_intersection", "citefix_ksc", "tfidf", "bm25", "splade"]
 
 
 def parse_results(specs):
