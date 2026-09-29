@@ -14,9 +14,9 @@ langchain-core      # required to unpickle the stored Document objects
 
 # GPU path: extract_keywords.py, measure_efficiency.py, SPLADE, ALCE generation/scoring
 torch
-transformers
+transformers>=4.46,<5   # ALCE utils.load_model passes load_in_8bit, removed in 5.x; keep ALCE unmodified
 accelerate
-sentence-transformers
+sentence-transformers<6   # 6.x requires transformers>=5
 sentencepiece       # T5 tokenizer for the AutoAIS NLI model and gtr-t5-*
 protobuf
 
