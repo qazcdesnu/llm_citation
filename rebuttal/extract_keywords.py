@@ -96,7 +96,8 @@ def run(dataset: str, split_field: str, extractor: str, stem: bool,
 
     cache = []
     for it in items:
-        sentences = A.split(it[split_field], dataset, it["question"])
+        units = A.split(it[split_field], dataset, it["question"])
+        sentences = A.scoring_texts(units, dataset, it["question"])  # same text every scorer sees
         docs = it["docs"][:top_k]
         contents = [f"{d['title']} {d['text']}" for d in docs]
         cache.append({

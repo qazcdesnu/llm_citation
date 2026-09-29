@@ -18,3 +18,6 @@ rebuttal/runs/
 
 # Slurm job logs
 rebuttal/slurm_log/
+
+# Keyword caches (regenerate with rebuttal/extract_keywords.py)
+rebuttal/cache/

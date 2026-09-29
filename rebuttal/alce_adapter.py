@@ -75,6 +75,36 @@ def split(text: str, dataset: str, question: str) -> list[str]:
     return sent_tokenize(text)
 
 
+def scoring_texts(units: list[str], dataset: str, question: str) -> list[str]:
+    """Text each method scores against the documents.
+
+    QAMPARI units are bare answers ("Heat"), which carry almost no lexical signal.
+    eval.py judges them as `question + " " + answer`, and ALCE's post_hoc_cite.py
+    retrieves with the same string, so every method scores that. The written
+    output keeps the bare answers.
+    """
+    if dataset == "qampari":
+        return [f"{question} {u}" for u in units]
+    return list(units)
+
+
+_SENT_END = re.compile(r"[.!?]+[\"'”’)\]]*$")
+
+
+def with_marker(sent: str, n: int) -> str:
+    """Put "[n]" before the sentence's final punctuation, as ALCE outputs do.
+
+    eval.py re-splits the output with sent_tokenize; a marker placed after the
+    period ("A. [1] B.") would be read as belonging to the next sentence.
+    """
+    s = sent.rstrip()
+    # terminal punctuation plus any closing quotes/brackets: `"best."`, `Twenties!"`
+    m = _SENT_END.search(s)
+    if m:
+        return f"{s[:m.start()].rstrip()} [{n}]{m.group()}"
+    return f"{s} [{n}]"
+
+
 def cite_item(item, dataset, scorer, top_k, temperature, threshold,
               text_field="answer", keywords=None):
     """Assign one citation per sentence over the top-k retrieved docs.
@@ -87,11 +117,13 @@ def cite_item(item, dataset, scorer, top_k, temperature, threshold,
     if not sentences or not docs:
         return None
 
+    texts = scoring_texts(sentences, dataset, item["question"])
     contents = [f"{d['title']} {d['text']}" for d in docs]
     ctx = Context(
         query=item["question"],
         retrieval_scores=np.array([float(d.get("score", 0.0)) for d in docs]),
     )
+    ctx.extras["dense_docs"] = [f"{d['title']}. {d['text']}" for d in docs]  # ALCE searcher.py format
     if scorer == "keyword_jaccard":
         if keywords is None:
             raise ValueError(
@@ -101,14 +133,15 @@ def cite_item(item, dataset, scorer, top_k, temperature, threshold,
         n_s, n_d = min(len(ks), len(sentences)), min(len(kd), len(contents))
         if n_s == 0 or n_d == 0:
             return None
-        sentences, contents = sentences[:n_s], contents[:n_d]
+        sentences, texts, contents = sentences[:n_s], texts[:n_s], contents[:n_d]
         docs = docs[:n_d]
+        ctx.extras["dense_docs"] = ctx.extras["dense_docs"][:n_d]
         ctx.keyword_sentences, ctx.keyword_documents = ks[:n_s], kd[:n_d]
 
-    raw = SCORERS[scorer](sentences, contents, ctx)
+    raw = SCORERS[scorer](texts, contents, ctx)
     picks = assign(softmax(raw, temperature), threshold)
 
-    cited = [s if p < 0 else f"{s} [{int(p) + 1}]" for s, p in zip(sentences, picks)]
+    cited = [s if p < 0 else with_marker(s, int(p) + 1) for s, p in zip(sentences, picks)]
     # QAMPARI units are comma-separated answers; eval.py re-splits on ",", so the
     # commas must survive ("A [1], B [2]."). ASQA sentences are space-joined.
     out = ", ".join(cited) + "." if dataset == "qampari" else " ".join(cited)

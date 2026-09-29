@@ -1,20 +1,21 @@
 # Rebuttal 진행 계획
 
-> **현재 상태** (2026-09-29) — M0 완료, M1 서버 환경 구축 중 · **범위: rebuttal 최소 조건**
+> **현재 상태** (2026-09-29) — M0·M1 완료, M2 결과 나옴(**E1 게이트: 핵심 주장 미지지 → 재서술 검토 중**) · **범위: rebuttal 최소 조건**
 >
 > | 단계 | 내용 | 상태 |
 > | --- | --- | --- |
 > | M0 | 진단 및 범위 확정 | ✅ 완료 |
-> | M1 | 평가 하네스 정비 | 🔄 서버(GSDS) 환경·ALCE 설치 중(job 499643), 생성 답변 입력 코드 남음 |
-> | M2 | E1–E3 (full-token Jaccard, CiteFix) | ⬜ 대기 — E4–E6은 **범위 제외** |
-> | M3 | 신규 baseline (E7–E9) | ⬜ 대기 — E9 SPLADE 신규 구현 |
+> | M1 | 평가 하네스 정비 | ✅ 완료 — 환경(transformers<5), 생성 답변 입력, GPU 2장 AutoAIS 검증 |
+> | M2 | E1–E3 (full-token Jaccard, CiteFix) | ✅ 실행 완료 (아래 "M2 결과") — E4–E6은 **범위 제외** |
+> | M3 | 신규 baseline (E7–E9) | 🔄 E7·E8 완료(M2와 함께 실행), **E9 SPLADE 남음** |
 > | M4 | 효율성 재측정 | ⬜ 대기 — **E10만**, E11은 범위 제외 |
 > | M5 | 본문 수정 | ⬜ 대기 |
 > | M6 | Rebuttal letter | ⬜ 대기 |
 >
 > **실행 환경**: GSDS 서버(RTX 3090/4090 24GB). AutoAIS(T5-XXL 11B)는 GPU 2장으로 ALCE 코드 수정 없이 채점 가능 (`rebuttal/SERVER.md`). 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`.
 >
-> **남은 블로커**: ① HF 토큰 — `meta-llama/Llama-2-7b-chat-hf` 접근 승인 하나만 필요 ② 공저자 확인 — `asqa_comp.pkl`의 `ours_*` 컬럼 의미 및 Table 1 ASQA/QAMPARI baseline이 post-hoc인지 in-context 인용인지
+> **남은 블로커**: ① HF 토큰 — `meta-llama/Llama-2-7b-chat-hf` 접근 승인 하나만 필요 ② 공저자 확인 — `asqa_comp.pkl`의 `ours_*` 컬럼 의미 (Table 1 baseline의 정체는 ALCE 논문 대조로 해결: **VANILLA**)
+> ③ **논문 주장 재서술 방향** — 공저자·지도교수와 합의 필요 (아래 "M2 결과")
 > (OpenAI API 키는 CovidDialog 비교를 범위에서 뺐으므로 더 이상 필요 없음)
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
@@ -63,6 +64,63 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 - 필요 자원: OpenAI API 키, 공저자 확인(논문 점수의 `jaccard_output`/`kw_jaccard_output` 컬럼).
 - PubMed 2023 baseline(복구 완료분, `rebuttal/pubmed/`)은 CovidDialog를 다른 모델로 재생성할 때만 필요.
 </details>
+
+## M2 결과 (2026-09-29)
+
+**설정**: Llama2-7B Chat, ALCE VANILLA 프롬프트(5 docs, 2-shot)로 ASQA·QAMPARI 각 100건 생성(`quick_test 100`, seed 42). 생성기가 붙인 인용을 지우고,
+모든 방법이 같은 답변 · 같은 5개 문서 · **threshold 0**(문장마다 argmax 문서를 인용)으로 재인용. QAMPARI는 모든 방법이 "질문 + 답변"으로 점수 계산. ALCE `eval.py --citations`(AutoAIS)로 채점.
+실행: `rebuttal/experiments/m2.sbatch` (job 501415 → 501873 → 501970). 표: `rebuttal/results/m2_scores.md`.
+
+### ASQA
+
+| Method | Citation Recall | Citation Precision | F1 |
+| --- | ---: | ---: | ---: |
+| Dense MIPS (gtr-t5-xxl) — baseline | 56.3 | 56.3 | 56.3 |
+| Keyword Jaccard — proposed | 53.3 | 53.3 | 53.3 |
+| Keyword Jaccard — proposed (threshold 0.2) | 51.8 | 51.8 | 51.8 |
+| E1 full-token Jaccard | 56.1 | 56.1 | 56.1 |
+| E2 CiteFix §3.1 | 55.3 | 55.3 | 55.3 |
+| E3 CiteFix §3.2 KSC | 55.1 | 55.1 | 55.1 |
+| E7 TF-IDF | 52.3 | 52.3 | 52.3 |
+| E8 BM25 | 48.6 | 48.6 | 48.6 |
+| Generator's own in-context citations (reference) | 56.0 | 50.0 | 52.8 |
+| ALCE post_hoc_cite gtr-t5-xxl (reference) | 56.3 | 56.3 | 56.3 |
+
+### QAMPARI
+
+| Method | Citation Recall | Citation Precision | F1 |
+| --- | ---: | ---: | ---: |
+| Dense MIPS (gtr-t5-xxl) — baseline | 14.0 | 14.0 | 14.0 |
+| Keyword Jaccard — proposed | 10.8 | 10.8 | 10.8 |
+| Keyword Jaccard — proposed (threshold 0.2) | 10.6 | 11.0 | 10.8 |
+| E1 full-token Jaccard | 10.2 | 10.2 | 10.2 |
+| E2 CiteFix §3.1 | 12.7 | 12.7 | 12.7 |
+| E3 CiteFix §3.2 KSC | 12.9 | 12.9 | 12.9 |
+| E7 TF-IDF | 13.8 | 13.8 | 13.8 |
+| E8 BM25 | 13.3 | 13.3 | 13.3 |
+| Generator's own in-context citations (reference) | 10.6 | 10.9 | 10.8 |
+| ALCE post_hoc_cite gtr-t5-xxl (reference) | 14.0 | 14.0 | 14.0 |
+
+
+- 모든 문장에 인용을 하나씩 붙이므로 재현율 = 정밀도.
+- 우리 dense 구현(`baselines.dense_gtr`)이 ALCE 공식 `post_hoc_cite.py --retriever gtr-t5-xxl`과 **두 데이터셋 모두 정확히 일치**(56.3 / 14.0) → 비교 경로 검증.
+- ASQA 답변 품질(모든 방법 공통 텍스트): str_em 25.6, QA-EM 15.5, QA-F1 21.9.
+
+**E1 게이트 판정: 핵심 주장이 이 조건에서 지지되지 않음.**
+| 비교 | ASQA | QAMPARI |
+| --- | --- | --- |
+| 제안 vs E1 full-token | 53.3 < 56.1 | 10.8 > 10.2 |
+| 제안 vs dense post-hoc | 53.3 < 56.3 | 10.8 < 14.0 |
+| 제안 vs VANILLA(생성기 자체 인용) | F1 53.3 > 52.8 | 10.8 = 10.8 |
+
+주의: 생성 모델 1개 · 100건. ALCE가 보고한 Llama2-7B Chat VANILLA의 seed 간 표준편차가 ASQA 인용 재현율 ±4.5이므로 2–3점 차이는 통계적으로 확정적이지 않다.
+
+**논문 Table 1 baseline = ALCE VANILLA (확인).** ALCE 논문(arXiv:2305.14627) 부록 Table 19(ASQA)·20(QAMPARI)의 VANILLA 인용 재현율/정밀도가 Table 1 baseline과 **10쌍 모두 정확히 일치**:
+Llama2-7B Chat 50.9/47.5 · 10.6/10.9, Llama2-13B Chat 38.4/39.4 · 9.6/9.7, Vicuna-7B 40.3/42.6 · 10.1/10.9, Llama-7B 6.2/9.2 · 5.1/5.7, Llama-13B 10.6/15.4 · 6.7/7.1.
+→ §5.2의 "gtr-t5-xxl post-hoc MIPS" 서술과 불일치. 또한 ALCE 수치는 전체 dev set · 3 seeds 평균이고 제안 방법은 100건이어서 샘플도 다르다.
+→ 논문의 개선은 "생성기 자체 인용 대비 post-hoc 재인용"의 효과이며, "keyword 방식이 dense보다 정확하다"는 근거는 되지 못한다.
+
+**수정한 버그 (기록)**: ① QAMPARI 출력이 공백으로 이어져 `eval.py`의 쉼표 분할이 깨짐 → 쉼표로 결합. ② ASQA에서 인용 표시를 마침표 뒤에 붙여 `eval.py`가 다음 문장 것으로 읽음 → ALCE처럼 끝 문장부호(닫는 따옴표 포함) 앞에 삽입. 첫 M2 실행(501415)의 ASQA 수치는 ②로 무효, 재채점함.
 
 ## 서버 이전 후 확정 사항 (2026-09-28)
 
@@ -177,11 +235,11 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [x] GPU 실행 코드 작성 — `extract_keywords.py`(E4·E5 스위치 포함), `measure_efficiency.py`(E10·E11)
 - [x] 서버 실행 가이드 + 요구 사양 문서화 → `rebuttal/SERVER.md`
 - [x] 서버 이전 준비 — 노트북 경로 하드코딩 제거(`ALCE_DIR`), sbatch 내 `source` 기반 conda 활성화, 작업 경로 `/shared/s3/lab03/jinwoongkim` (2026-09-28)
-- [ ] 서버 환경 구축 — `llmcite` 설치(GPU 노드), 드라이버·`torch.cuda` 확인, ALCE clone + 데이터(`$ALCE_DIR`), `eval.py` 의존성
-- [ ] **생성 답변 입력 경로** — `alce_adapter`가 ALCE `run.py` 결과 JSON(`output`)을 읽도록 확장, 샘플을 `--quick_test 100`·seed 42로 맞춤
-- [ ] ALCE로 생성 답변 만들기 — **Llama2-7B Chat 하나**, ASQA·QAMPARI 각 100건
-- [ ] GPU 경로 검증 — 파일 1개로 AutoAIS 2-GPU 적재·채점 확인 후 전체 제출
-- [ ] **재실행 결과가 Table 1과 같은 방향인지 확인** — 제안 방법 vs 재실행 dense baseline. 생성 답변을 새로 만들므로 수치 일치가 아니라 방향 일치를 게이트로 둔다
+- [x] 서버 환경 구축 — `llmcite` 설치(GPU 노드), 드라이버·`torch.cuda` 확인, ALCE clone + 데이터(`$ALCE_DIR`), `eval.py` 의존성
+- [x] **생성 답변 입력 경로** — `alce_adapter`가 ALCE `run.py` 결과 JSON(`output`)을 읽도록 확장, 샘플을 `--quick_test 100`·seed 42로 맞춤
+- [x] ALCE로 생성 답변 만들기 — **Llama2-7B Chat 하나**, ASQA·QAMPARI 각 100건
+- [x] GPU 경로 검증 — 파일 1개로 AutoAIS 2-GPU 적재·채점 확인 후 전체 제출
+- [x] **재실행 결과가 Table 1과 같은 방향인지 확인** — ❌ dense post-hoc 대비로는 **반대 방향**. Table 1 baseline이 dense가 아니라 VANILLA였기 때문(아래 "M2 결과")
 
 ### 스모크 테스트에서 나온 사실
 
@@ -229,9 +287,9 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 
 ## M2 — 저비용 실험 (기존 파이프라인 재사용) · Point 2, 3, 5
 
-- [ ] **E1 full-token Jaccard** — ASQA·QAMPARI 생성 답변 위에서 재실행·채점. **결과가 나오면 게이트 검토** *(Point 2, 3)*
-- [ ] **E2 CiteFix §3.1 재구현** — 정규화 없는 token intersection *(Point 5)*
-- [ ] **E3 CiteFix §3.2 KSC 재구현** — λ=0.8, retrieval score 필요(ALCE `docs`에 있는지 확인) *(Point 5)*
+- [x] **E1 full-token Jaccard** — ASQA 56.1 · QAMPARI 10.2 (제안 53.3 · 10.8). **게이트: 지지 안 됨** → "M2 결과" *(Point 2, 3)*
+- [x] **E2 CiteFix §3.1 재구현** — 정규화 없는 token intersection *(Point 5)*
+- [x] **E3 CiteFix §3.2 KSC 재구현** — λ=0.8, retrieval score 필요(ALCE `docs`에 있는지 확인) *(Point 5)*
 - [ ] ⛔ E4 stemming on/off ablation — `stem_entities()` 우회 *(Point 3)*
 - [ ] ⛔ E5 domain-specific NER → general extractor 교체 ablation — **MedDialog에서만 성립** (ASQA/QAMPARI는 원래 general extractor) *(Point 3)*
 - [ ] ⛔ E6 threshold / top-*k* 민감도 (기존 Appendix C.3 threshold 분석으로 대응) *(Point 3)*
@@ -240,8 +298,8 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 
 ## M3 — 신규 baseline 구현 · Point 1
 
-- [ ] E7 TF-IDF citation baseline — 우리 구현 ✅, ALCE `post_hoc_cite.py --retriever tfidf`와 교차 확인
-- [ ] E8 BM25 citation baseline (`rank_bm25`) — 고정된 retrieved 문서 집합 위에서 문장별 점수화
+- [x] E7 TF-IDF citation baseline — 우리 구현 ✅, ALCE `post_hoc_cite.py --retriever tfidf`와 교차 확인
+- [x] E8 BM25 citation baseline (`rank_bm25`) — 고정된 retrieved 문서 집합 위에서 문장별 점수화
 - [ ] **E9 SPLADE citation baseline** — 유일한 신규 구현. 모델 선정 및 sparse 표현 → score_matrix 변환
 - [x] ~~CiteFix 재현 여부 결정~~ → M2(E2·E3)로 이동, M0에서 확정
 - [ ] ASQA·QAMPARI 인용 품질 표 작성 (제안 방법 · dense MIPS · E1–E3 · E7–E9)
@@ -263,6 +321,8 @@ CiteFix의 BERTScore(§3.3) / fine-tuned BERTScore(§3.4) / LLM matching(§3.5) 
 - [ ] M2 ablation 표 본문 삽입 *(Point 3)*
 - [ ] M3 baseline 비교 표 본문 삽입 *(Point 1)*
 - [ ] Appendix B "ablation study" → "model sweep" 등으로 용어 정정
+- [ ] **§5.2 baseline 서술 정정** — "gtr-t5-xxl post-hoc MIPS"가 아니라 Table 1 수치는 **ALCE VANILLA(in-context 인용)**. ALCE 수치는 전체 dev set · 3 seeds 평균, 제안 방법은 100건이라는 샘플 불일치도 명시하거나 해소
+- [ ] **주장 범위 재서술** — M2 결과에 맞춰 Abstract·Introduction·§5.3·Conclusion의 "기존 방법 대비 정확도 향상"을 조정 (방향은 공저자 합의 후)
 - [ ] **"MedDialog" 데이터셋 명칭·인용 정정** — 실제 사용 데이터는 MedDialog(Zeng et al., 2020, [29])가 아니라 **CovidDialog-English**(Ju et al., "On the Generation of Medical Dialogues for COVID-19", arXiv:2005.05442 / ACL 2021 short). §3·§5.1·Table 1·2·4·Fig. 4·Appendix A의 "MedDialog" 표기와 인용 [29]를 교체하거나 "CovidDialog-English (UCSD MedDialog 프로젝트)"로 명시. 결과 수치는 변동 없음. 근거는 아래 "서버 이전 후 확정 사항" 8번
 - [ ] 결과가 바뀐 부분에 맞춰 Abstract / Introduction 주장 강도 조정
 

@@ -118,6 +118,29 @@ def tfidf_cosine(sentences, documents, ctx: Context) -> np.ndarray:
     return cosine_similarity(matrix[:n], matrix[n:]).astype(float)
 
 
+_GTR_MODELS: dict = {}
+
+
+def dense_gtr(sentences, documents, ctx: Context, name: str = "gtr-t5-xxl") -> np.ndarray:
+    """Baseline - the paper's dense MIPS comparison point (ALCE post-hoc, gtr-t5-xxl).
+
+    Mirrors ALCE searcher.py: documents as "title. text", normalised embeddings,
+    inner product. ALCE's post_hoc_cite.py defaults to gtr-t5-large; the paper
+    reports gtr-t5-xxl, so that is used here. Loaded once per process (fp32, ~19GB).
+    """
+    import torch
+    from sentence_transformers import SentenceTransformer
+
+    if name not in _GTR_MODELS:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _GTR_MODELS[name] = SentenceTransformer(f"sentence-transformers/{name}", device=device)
+    model = _GTR_MODELS[name]
+    docs = ctx.extras.get("dense_docs", documents)
+    es = model.encode(list(sentences), normalize_embeddings=True, convert_to_numpy=True)
+    ed = model.encode(list(docs), normalize_embeddings=True, convert_to_numpy=True)
+    return (es @ ed.T).astype(float)
+
+
 def bm25(sentences, documents, ctx: Context) -> np.ndarray:
     """E8 - BM25 with each sentence as the query over the retrieved set."""
     from rank_bm25 import BM25Okapi
@@ -127,6 +150,7 @@ def bm25(sentences, documents, ctx: Context) -> np.ndarray:
 
 
 SCORERS = {
+    "dense_gtr_xxl": dense_gtr,  # baseline (paper's dense MIPS)
     "keyword_jaccard": keyword_jaccard,   # proposed
     "full_token_jaccard": full_token_jaccard,  # E1
     "citefix_intersection": citefix_intersection,  # E2

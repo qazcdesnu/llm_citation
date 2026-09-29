@@ -34,8 +34,8 @@ import alce_adapter as A  # noqa: E402
 
 HERE = Path(__file__).parent
 RUNS = HERE / "runs"
-ALL_METHODS = ["keyword_jaccard", "full_token_jaccard", "citefix_intersection",
-               "citefix_ksc", "tfidf", "bm25"]
+ALL_METHODS = ["dense_gtr_xxl", "keyword_jaccard", "full_token_jaccard",
+               "citefix_intersection", "citefix_ksc", "tfidf", "bm25"]
 
 
 def parse_results(specs):
@@ -62,7 +62,7 @@ def do_build(args):
                 threshold=args.threshold, limit=args.limit, text_field=field,
                 keyword_cache=cache, result=result)
             name = f"{dataset}-{src}-{method}-top{args.top_k}-t{args.temperature}-th{args.threshold}"
-            path = A.write(payload, RUNS, name)
+            path = A.write(payload, Path(args.runs_dir), name)
             print(f"  {dataset:8s} {method:22s} items={len(payload['data']):4d} "
                   f"dropped={dropped:3d} -> {path.name}")
 
@@ -70,14 +70,16 @@ def do_build(args):
 def do_eval(args):
     """Run ALCE eval.py on every built file. Needs the large GPU."""
     alce = Path(args.alce).expanduser()
-    files = sorted(RUNS.glob("*.json"))
+    files = sorted(Path(args.runs_dir).glob("*.json"))
     if not files:
-        sys.exit("no files in runs/ -- run --build first")
+        sys.exit(f"no files in {args.runs_dir} -- run --build first")
     for f in files:
         if f.with_suffix(".json.score").exists() and not args.overwrite:
             print(f"  skip (scored): {f.name}")
             continue
-        flags = ["--citations"] + (["--qa", "--mauve"] if "asqa" in f.name else [])
+        # Re-cited files share the generated text, so answer-quality metrics
+        # (--qa/--mauve) are identical across methods; score citations only.
+        flags = args.eval_flags.split()
         cmd = [sys.executable, "eval.py", "--f", str(f.resolve()), *flags]
         print(f"  $ {' '.join(cmd)}")
         if not args.dry_run:
@@ -100,6 +102,8 @@ def main():
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--keyword-cache", default=None)
     ap.add_argument("--alce", default=str(A.ALCE_DIR), help="ALCE checkout (default: $ALCE_DIR or ~/ALCE)")
+    ap.add_argument("--runs-dir", default=str(RUNS), help="where built citation files go / are scored from")
+    ap.add_argument("--eval-flags", default="--citations", help="flags passed to ALCE eval.py")
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
