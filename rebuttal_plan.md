@@ -16,7 +16,7 @@
 > 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`. **공저자 원본 결과 확보**(`/shared/s3/lab03/juhyeonkim/ALCE/`, 아래 "공저자 원본 자료" 참조) — MedDialog Llama2 Chat 결과가 있어 벡터 DB 없이 재인용 가능.
 > PubMed 2023 baseline 다운로드는 MedDialog를 다른 모델로 확장할 때만 필요 (job 492514, `rebuttal/pubmed/`).
 >
-> **남은 블로커**: ① Llama-2 접근 승인 HF 토큰 ② OpenAI API 키(MedDialog GPT-4 평가, 2단계) ③ 공저자 확인 — **CovidDialog GPT-4 점수가 어느 컬럼(`jaccard_output` vs `kw_jaccard_output`)으로 나왔는지**, FAISS DB 위치(공저자 폴더엔 없음), "year_partial" 의미, MedDialog baseline encoder, `asqa_comp.pkl`의 `ours_*` 컬럼 의미
+> **남은 블로커**: ① Llama-2 접근 승인 HF 토큰 ② OpenAI API 키(CovidDialog 평가, gpt-4o-mini — 발급 진행 중) ③ 공저자 확인 — **CovidDialog GPT-4 점수가 어느 컬럼(`jaccard_output` vs `kw_jaccard_output`)으로 나왔는지**, FAISS DB 위치(공저자 폴더엔 없음), "year_partial" 의미, MedDialog baseline encoder, `asqa_comp.pkl`의 `ours_*` 컬럼 의미
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
 상태 표기: `[ ]` 미착수 · `[x]` 완료 · `[~]` 진행 중 · 🅰 1단계 · 🅱 2단계
@@ -51,11 +51,21 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안을 검토했으�
 - **MedDialog 다른 모델로 확장** — Llama2 Chat 외 모델은 원본 결과가 없어 코퍼스 재구축(PubMed 2023 복구분) + 재생성이 필요. 가장 비쌈. 진행 여부는 1단계 결과와 남은 기간으로 결정
 - **확장** — 생성 모델 9개 전체, ASQA 948 / QAMPARI 1000 전체 dev set
 
-### 🅰 1단계 추가 후보 — MedDialog (Llama2 Chat, 조건: OpenAI API 키)
+### 🅰 1단계 추가 후보 — CovidDialog("MedDialog") (Llama2 Chat, 조건: OpenAI API 키)
 
 공저자 폴더의 원본 결과(`llama2_chat-meddialog-…-kwj-citation.pkl`)에 **생성 답변 61건 + 건당 검색 문서 15개**(PubMed 698 · Medline 217, 본문 포함)가 들어 있다.
 post-hoc 인용은 답변과 문서만 있으면 되므로 **벡터 DB 재구축 없이** 같은 답변 위에서 전 방법(dense · 제안 · E1–E3 · E7–E9)과 **E5**(BioBERT NER ↔ general extractor)를 돌릴 수 있다.
-Llama2 Chat은 사람 평가(Table 2)에 쓴 모델이라 대표성도 있다. 남는 비용은 GPT-4 쌍대 평가뿐이다.
+Llama2 Chat은 사람 평가(Table 2)에 쓴 모델이라 대표성도 있다. 남는 비용은 LLM 쌍대 평가뿐이다.
+
+**평가 방식 (2026-09-29 확정)**
+- **기존 Table 1·4의 GPT-4 점수는 그대로 유지**한다. 새 비교표(Table X)만 **gpt-4o-mini**로 채점한다.
+- **Table X 안의 모든 방법을 같은 평가자로 채점**한다. 새 방법(E1–E3, E5, E7–E9)뿐 아니라 **baseline과 제안 방법도 gpt-4o-mini로 재채점**한다. 기존 GPT-4 점수와 Table X 점수는 섞거나 직접 비교하지 않는다.
+- 프롬프트 · 평가 기준 · A/B 익명 쌍대 비교 · temperature는 `GPT4_evaluation.ipynb`와 동일하게 두고 **모델만 교체**한다. 원 평가 모델 `gpt-4-1106-preview`는 현재 OpenAI 가격표에 없다(교체 사유).
+- **신뢰성 장치**: ① gpt-4o-mini로 재채점한 baseline vs 제안 방법이 Table 1(Llama2 Chat 2.09 vs 2.58)과 같은 방향인지 보고 ② A/B 순서를 바꿔 두 번 채점해 위치 편향 통제 ③ temperature 0.7이므로 3회 반복 평균 ④ (선택) 일부 샘플을 gpt-4o로 교차 채점해 일치율 보고.
+- ①은 논문 점수가 `jaccard_output`/`kw_jaccard_output` 중 어느 컬럼으로 나왔는지 확인된 뒤에 가능(블로커 ③).
+- **보조 지표**: NLI(T5-XXL) 문장 × 문서 라벨 + 규칙 채점. 라벨을 한 번 만들고 모든 방법을 결정적으로 채점하며, 인용이 불필요한 문장에 인용하지 않으면 정답으로 처리. 라벨 일부는 사람이 검수.
+- **예상 비용**: 호출당 입력 약 4,500 · 출력 약 600 토큰 ≈ $0.001. 61건 × 8개 방법 × 순서 교체 2 × 반복 3 ≈ 2,900회 ≈ **$3**. gpt-4o로 전부 하면 약 $50.
+- **논문 명시 문구(안)**: "The original GPT-4 scores in Table 1 and 4 are retained as reported. For the additional baselines in Table X, we re-ran the pairwise evaluation with GPT-4o-mini using the identical prompt, criteria, and anonymized A/B protocol (Appendix B). All methods in Table X, including the baseline and ours, were re-scored with the same judge; scores are comparable only within that table."
 
 MedDialog를 끝내 수행하지 못하면 E5가 빠진다. 논문 Limitations가 이미 "extractor 선택에 대한 민감도는 정량화하지 않았다"고 인정하므로 rebuttal에서 이 한계로 답한다.
 
