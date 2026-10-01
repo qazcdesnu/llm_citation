@@ -15,7 +15,7 @@
 > **실행 환경**: GSDS 서버(RTX 3090/4090 24GB). AutoAIS(T5-XXL 11B)는 GPU 2장으로 ALCE 코드 수정 없이 채점 가능 (`rebuttal/SERVER.md`). 작업 디렉토리 `/shared/s3/lab03/jinwoongkim`.
 >
 > **남은 블로커**: ① HF 토큰 — `meta-llama/Llama-2-7b-chat-hf` 접근 승인 하나만 필요 ② 공저자 확인 — `asqa_comp.pkl`의 `ours_*` 컬럼 의미 (Table 1 baseline의 정체는 ALCE 논문 대조로 해결: **VANILLA**)
-> ③ **논문 주장 재서술 방향** — 공저자·지도교수와 합의 필요 (아래 "M2 결과")
+> ③ **논문 주장 재서술 방향** — 공저자·지도교수와 합의 필요 (아래 "M2 결과"). 소구점 논의 자료: **`plan_02_positioning.md`**
 > (OpenAI API 키는 CovidDialog 비교를 범위에서 뺐으므로 더 이상 필요 없음)
 
 `review.md`의 Point 1–5를 의존성 순서로 재배열한 실행 계획.
@@ -54,7 +54,7 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 | **E4** stemming on/off · **E6** threshold / top-*k* | 리뷰어가 단계별 ablation을 "또는"으로 제시, E1이 핵심 ablation을 겸함 | E1을 ablation으로 제시. threshold는 기존 Appendix C.3 참조 |
 | **E5** domain NER → general extractor | CovidDialog(의료)에서만 성립하는데 CovidDialog 비교를 제외 | 논문 Limitations의 기존 인정("extractor 민감도 미정량화")으로 답함 |
 | **E11** Fig. 3 재측정 | 최소 범위. Fig. 3 측정 스크립트가 없어 범위 확인 불가 | 캡션에 측정 범위를 명시 |
-| **CovidDialog("MedDialog") 비교 (A2)** | 리뷰어가 요구한 비교는 ASQA/QAMPARI로 충족 | 새 비교는 ASQA/QAMPARI에서 수행했음을 명시 |
+| **CovidDialog("MedDialog") 비교 (A2)** | 리뷰어가 요구한 비교는 ASQA/QAMPARI로 충족 | 새 비교는 ASQA/QAMPARI에서 수행했음을 명시. *2026-10-01: 소구점 ② 선택적 인용 검증용으로 재개 검토 중 (`plan_02_positioning.md` 3.5)* |
 
 <details><summary>참고: A2를 다시 넣을 경우의 설계 (2026-09-29 검토 기록)</summary>
 
@@ -119,6 +119,9 @@ SPLADE · full-token Jaccard · CiteFix만으로 줄이는 안도 검토했으�
 **두 데이터셋 모두 1위** (ASQA 60.8 · QAMPARI 17.7; dense 대비 +4.5 · +3.7, 제안 방법 대비 +7.5 · +6.9).
 제안 방법 순위: 9개 방법 중 ASQA 6위 · QAMPARI 7위. 리뷰어가 명시한 세 방법 중 ASQA에서는 BM25·TF-IDF보다 높고, QAMPARI에서는 셋 모두보다 낮다.
 SPLADE는 BERT 크기 MLM 추론이 필요하므로, 재서술 시 제안 방법의 차별점은 효율성 쪽으로 좁혀지며 **E10에 SPLADE 비용을 반드시 포함**해야 한다. 논문 §6 Future work가 이미 SPLADE식 확장을 언급하므로 한계·향후 방향으로 연결 가능.
+
+**선택적 인용 빈도 (2026-10-01)**: 제안 방법 threshold 0.2에서 인용을 생략한 단위는 ASQA 127문장 중 3개(2.4%), QAMPARI 528개 답 중 41개(7.8%).
+생략된 것은 인사말이 아니라 인용이 필요한 사실 문장(keyword 미겹침)이라, 위키 QA에서는 생략이 손해다(ASQA 53.3 → 51.8). 해석은 `plan_02_positioning.md` 3절.
 
 주의: 생성 모델 1개 · 100건. ALCE가 보고한 Llama2-7B Chat VANILLA의 seed 간 표준편차가 ASQA 인용 재현율 ±4.5이므로 2–3점 차이는 통계적으로 확정적이지 않다.
 
