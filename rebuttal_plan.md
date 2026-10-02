@@ -154,7 +154,7 @@ E10 on appendix_data.pkl: 200 responses, 969 sentences, 3876 sentence-document p
 | dense gtr-t5-large | gpu | 5.65 | 1290 | 14.650 | 15.118 | 1438 |
 | splade (SPLADE++) | gpu | 1.49 | 428 | 5.638 | 5.818 | 603 |
 
-1. **Fig. 6의 결함 확인**: keyword를 미리 계산해 두고 재면 0.003초(논문 0.045초, 장비 차이). 추출을 포함하면 **7.7초(general) / 23.6초(domain)** — TF-IDF(0.41초)·BM25(0.34초)보다 **19–58× 느림**.
+1. **Fig. 6의 결함 확인**: keyword를 미리 계산해 두고 재면 0.003초(논문 0.045초, 장비 차이). 추출을 포함하면 **7.7초(general) / 23.6초(domain)** — TF-IDF(0.41초)·BM25(0.34초)보다 **19–70× 느림** (TF-IDF 대비 19–57×, BM25 대비 23–70×).
 2. **gtr-t5-xxl 대비 우위는 추출 포함해도 유지**: 추론 **22.7×(general) / 7.4×(domain) 빠름**, GPU 메모리 **80× / 29× 적음** (논문 Fig. 3 주장: 20.6× 빠름, 17.9× 적음).
 3. **SPLADE보다는 효율도 앞서지 않음**: SPLADE 추론 5.6초 · 603MB. 정확도도 SPLADE가 1위(M3).
 4. 1차 측정(job 504179)은 NER이 배치 1로 돌고, 이전 모델이 메모리에 남아 gtr-t5-large/SPLADE 메모리가 부풀려져 폐기. 폐기 전 참고치: 추출 포함 general 14.9초 / domain 45.0초.
